@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  pages: write
 
 jobs:
   deploy:
@@ -22,3 +23,25 @@ jobs:
           publish_dir: ./
           publish_branch: gh-pages
           exclude_assets: '.github'
+
+      - name: Enable GitHub Pages (one-time activation)
+        run: |
+          # Try to enable Pages if not already enabled
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/${{ github.repository }}/pages)
+
+          if [ "$HTTP_STATUS" = "404" ]; then
+            echo "Pages not enabled – activating now..."
+            curl -s -X POST \
+              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              https://api.github.com/repos/${{ github.repository }}/pages \
+              -d '{"source":{"branch":"gh-pages","path":"/"}}'
+            echo ""
+            echo "Pages activation requested."
+          else
+            echo "Pages already enabled (status $HTTP_STATUS)."
+          fi
