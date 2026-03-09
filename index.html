@@ -108,9 +108,16 @@
     }
     .suggestions.open { display: block; }
     .sug-item {
+      display: block;
+      width: 100%;
       padding: 11px 18px;
       cursor: pointer;
+      border: none;
       border-bottom: 1px solid var(--border);
+      background: transparent;
+      color: inherit;
+      font-family: inherit;
+      text-align: left;
       transition: background .13s;
     }
     .sug-item:last-child { border-bottom: none; }
@@ -926,10 +933,10 @@ async function searchAndShow(q) {
       el.innerHTML = '<div class="sug-empty">No schools found.</div>';
     } else {
       el.innerHTML = lastSchools.map((s, i) => `
-        <div class="sug-item" data-idx="${i}">
+        <button class="sug-item" type="button" data-idx="${i}">
           <div class="sug-name">${s['school.name']}</div>
           <div class="sug-loc">${s['school.city'] || ''}, ${s['school.state'] || ''}</div>
-        </div>
+        </button>
       `).join('');
       el.querySelectorAll('.sug-item').forEach(item => {
         item.addEventListener('click', () => selectSchool(lastSchools[+item.dataset.idx]));
