@@ -494,7 +494,14 @@ function checkApiError(d, status) {
 }
 
 async function apiFetch(url) {
-  const r = await fetch(url);
+  console.log('[Scorecard] fetching:', url);
+  let r;
+  try {
+    r = await fetch(url);
+  } catch (netErr) {
+    console.error('[Scorecard] Network error:', netErr);
+    throw new Error('NETWORK');
+  }
   if (r.status === 429) throw new Error('RATE_LIMIT');
   if (r.status === 403) throw new Error('API_KEY_BAD');
   if (!r.ok) throw new Error(`API error ${r.status}`);
@@ -504,7 +511,7 @@ async function apiFetch(url) {
 }
 
 async function searchSchools(q) {
-  const cacheKey = 'search:' + q.toLowerCase();
+  const cacheKey = 'search:' + getApiKey().slice(-6) + ':' + q.toLowerCase();
   const cached = cache.get(cacheKey);
   if (cached) return cached;
 
@@ -521,7 +528,7 @@ async function searchSchools(q) {
 }
 
 async function fetchPrograms(schoolId) {
-  const cacheKey = 'programs:' + schoolId;
+  const cacheKey = 'programs:' + getApiKey().slice(-6) + ':' + schoolId;
   const cached = cache.get(cacheKey, 3_600_000);
   if (cached) return cached;
 
@@ -1018,6 +1025,8 @@ async function searchAndShow(q) {
           searchAndShow(document.getElementById('schoolSearch').value.trim());
         }
       });
+    } else if (e.message === 'NETWORK') {
+      el.innerHTML = `<div class="sug-empty">Network error — check console (F12) for the request URL</div>`;
     } else {
       el.innerHTML = `<div class="sug-empty">Search error: ${e.message}</div>`;
     }
