@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>How much money will I make?</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0b0b11;
+      --bg2:       #111118;
+      --bg3:       #18181f;
+      --bg4:       #1e1e28;
+      --border:    #252530;
+      --border2:   #31313e;
+      --accent:    #38bdf8;
+      --accent2:   #0ea5e9;
+      --glow:      rgba(56,189,248,0.12);
+      --tx1:       #e2e8f0;
+      --tx2:       #8892a4;
+      --tx3:       #525870;
+      --green:     #4ade80;
+      --yellow:    #fbbf24;
+      --purple:    #a78bfa;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--tx1);
+      min-height: 100vh;
+      line-height: 1.5;
+    }
+
+    /* ── HEADER ── */
+    header {
+      padding: 52px 24px 36px;
+      text-align: center;
+      border-bottom: 1px solid var(--border);
+    }
+    h1 {
+      font-size: clamp(22px, 4.5vw, 40px);
+      font-weight: 700;
+      letter-spacing: -0.025em;
+      color: var(--tx1);
+      margin-bottom: 6px;
+    }
+    .hero-sub {
+      font-size: 15px;
+      color: var(--tx2);
+      font-weight: 400;
+    }
+
+    /* ── SEARCH ── */
+    .search-section {
+      max-width: 660px;
+      margin: 0 auto;
+      padding: 32px 20px 0;
+    }
+    .search-wrap {
+      position: relative;
+    }
+    .search-icon-wrap {
+      position: absolute;
+      left: 16px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--tx3);
+      pointer-events: none;
+      display: flex;
+      align-items: center;
+    }
+    .search-input {
+      width: 100%;
+      padding: 14px 18px 14px 46px;
+      background: var(--bg3);
+      border: 1px solid var(--border2);
+      border-radius: 14px;
+      color: var(--tx1);
+      font-size: 15px;
+      font-family: inherit;
+      outline: none;
+      transition: border-color .2s, box-shadow .2s;
+    }
+    .search-input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--glow);
+    }
+    .search-input::placeholder { color: var(--tx3); }
+
+    .suggestions {
+      position: absolute;
+      top: calc(100% + 6px);
+      left: 0; right: 0;
+      background: var(--bg4);
+      border: 1px solid var(--border2);
+      border-radius: 12px;
+      overflow: hidden;
+      z-index: 200;
+      box-shadow: 0 12px 40px rgba(0,0,0,.55);
+      display: none;
+    }
+    .suggestions.open { display: block; }
+    .sug-item {
+      padding: 11px 18px;
+      cursor: pointer;
+      border-bottom: 1px solid var(--border);
+      transition: background .13s;
+    }
+    .sug-item:last-child { border-bottom: none; }
+    .sug-item:hover { background: var(--bg3); }
+    .sug-name { font-size: 13.5px; font-weight: 500; color: var(--tx1); }
+    .sug-loc  { font-size: 11.5px; color: var(--tx3); margin-top: 1px; }
+    .sug-empty { padding: 12px 18px; font-size: 13px; color: var(--tx3); }
+
+    /* ── RESULTS ── */
+    .results-wrap {
+      max-width: 1060px;
+      margin: 0 auto;
+      padding: 0 20px 72px;
+      display: none;
+    }
+    .results-wrap.visible { display: block; }
+
+    /* School header */
+    .school-hd {
+      padding: 40px 0 28px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 28px;
+    }
+    .school-hd-inner { max-width: 660px; }
+    .school-title {
+      font-size: clamp(18px, 3vw, 26px);
+      font-weight: 700;
+      color: var(--tx1);
+      margin-bottom: 3px;
+      letter-spacing: -0.015em;
+    }
+    .school-plot-sub { font-size: 13px; color: var(--tx2); }
+
+    /* Stats row */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      gap: 14px;
+      margin-bottom: 22px;
+    }
+    .stat-card {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px 20px;
+    }
+    .stat-label {
+      font-size: 10.5px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .07em;
+      color: var(--tx3);
+      margin-bottom: 6px;
+    }
+    .stat-val {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: -0.02em;
+    }
+    .stat-val.sm { font-size: 15px; }
+    .stat-note { font-size: 11px; color: var(--tx3); margin-top: 3px; }
+
+    /* Chart card */
+    .chart-card {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px 24px 20px;
+      margin-bottom: 20px;
+    }
+
+    /* Controls */
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      margin-bottom: 22px;
+      align-items: flex-end;
+    }
+    .ctrl-group { display: flex; flex-direction: column; gap: 7px; }
+    .ctrl-label {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: var(--tx3);
+    }
+    .tab-row { display: flex; flex-wrap: wrap; gap: 5px; }
+    .tab {
+      padding: 5px 13px;
+      font-size: 12.5px;
+      font-family: inherit;
+      font-weight: 500;
+      border-radius: 7px;
+      border: 1px solid var(--border2);
+      background: transparent;
+      color: var(--tx2);
+      cursor: pointer;
+      transition: all .14s;
+    }
+    .tab:hover { background: var(--bg4); color: var(--tx1); }
+    .tab.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #000;
+    }
+
+    /* Chart container */
+    .chart-wrap { position: relative; }
+    .chart-canvas-wrap { position: relative; }
+
+    .chart-note {
+      margin-top: 12px;
+      font-size: 10.5px;
+      color: var(--tx3);
+      line-height: 1.5;
+    }
+
+    /* Loading / empty */
+    .loading-box, .empty-box {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 60px 20px;
+      gap: 14px;
+      color: var(--tx3);
+      font-size: 13.5px;
+    }
+    .spinner {
+      width: 36px; height: 36px;
+      border: 2.5px solid var(--border2);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .75s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Second chart card */
+    .chart-card2 {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px 24px 20px;
+      margin-bottom: 20px;
+    }
+    .card2-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--tx2);
+      margin-bottom: 4px;
+    }
+    .card2-sub {
+      font-size: 11px;
+      color: var(--tx3);
+      margin-bottom: 18px;
+    }
+
+    /* Footer */
+    footer {
+      border-top: 1px solid var(--border);
+      text-align: center;
+      padding: 20px;
+      font-size: 11px;
+      color: var(--tx3);
+    }
+    footer a { color: var(--tx2); text-decoration: none; }
+    footer a:hover { color: var(--tx1); }
+
+    /* Fade-in animation for results */
+    @keyframes fadeSlideUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .results-wrap.visible .school-hd,
+    .results-wrap.visible .stats-row,
+    .results-wrap.visible .chart-card,
+    .results-wrap.visible .chart-card2 {
+      animation: fadeSlideUp .4s ease both;
+    }
+    .results-wrap.visible .stats-row  { animation-delay: .05s; }
+    .results-wrap.visible .chart-card { animation-delay: .1s; }
+    .results-wrap.visible .chart-card2{ animation-delay: .15s; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>How much money will I make?</h1>
+  <p class="hero-sub">Average earnings of college graduates, by major</p>
+</header>
+
+<div class="search-section">
+  <div class="search-wrap" id="searchWrap">
+    <span class="search-icon-wrap">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+    </span>
+    <input id="schoolSearch" class="search-input" type="text" placeholder="Search for my school…" autocomplete="off" spellcheck="false">
+    <div class="suggestions" id="suggestions"></div>
+  </div>
+</div>
+
+<div class="results-wrap" id="results">
+  <div class="school-hd">
+    <div class="school-hd-inner">
+      <div class="school-title" id="schoolTitle">—</div>
+      <div class="school-plot-sub" id="plotSub">Median earnings by major</div>
+    </div>
+  </div>
+
+  <div class="stats-row" id="statsRow"></div>
+
+  <!-- Main bar chart card -->
+  <div class="chart-card">
+    <div class="controls">
+      <div class="ctrl-group">
+        <div class="ctrl-label">Degree Level</div>
+        <div class="tab-row" id="credTabs"></div>
+      </div>
+      <div class="ctrl-group">
+        <div class="ctrl-label">Earnings Period</div>
+        <div class="tab-row" id="yearTabs"></div>
+      </div>
+    </div>
+    <div class="chart-wrap" id="mainChartWrap">
+      <div class="loading-box"><div class="spinner"></div><span>Loading earnings data…</span></div>
+    </div>
+    <div class="chart-note" id="chartNote"></div>
+  </div>
+
+  <!-- Second chart: earnings trajectory -->
+  <div class="chart-card2" id="card2" style="display:none">
+    <div class="card2-title">Earnings Over Time</div>
+    <div class="card2-sub" id="card2Sub">Top majors — median earnings at each reported year</div>
+    <div style="position:relative;height:280px">
+      <canvas id="lineChart"></canvas>
+    </div>
+  </div>
+</div>
+
+<footer>
+  Data from <a href="https://collegescorecard.ed.gov/data" target="_blank" rel="noopener">U.S. Department of Education College Scorecard</a>.
+  Earnings reported for graduates who received federal financial aid.
+</footer>
+
+<script>
+/* ─────────────────────────────────────────────
+   CONFIG
+───────────────────────────────────────────── */
+// Get a free key at https://collegescorecard.ed.gov/data/documentation/
+const API_KEY  = 'DEMO_KEY';
+const API_BASE = 'https://api.data.ed.gov/student/v1';
+
+/* ─────────────────────────────────────────────
+   CIP 2-digit → colloquial name
+───────────────────────────────────────────── */
+const CIP = {
+  '01':'Agriculture & Food Science',
+  '03':'Environmental Science',
+  '04':'Architecture & Design',
+  '05':'Area & Cultural Studies',
+  '09':'Communications & Journalism',
+  '10':'Media Technology',
+  '11':'Computer Science & IT',
+  '12':'Culinary Arts & Hospitality',
+  '13':'Education',
+  '14':'Engineering',
+  '15':'Engineering Technology',
+  '16':'Languages & Linguistics',
+  '19':'Family & Consumer Sciences',
+  '22':'Law & Legal Studies',
+  '23':'English & Literature',
+  '24':'Liberal Arts & General Studies',
+  '25':'Library Science',
+  '26':'Biology & Life Sciences',
+  '27':'Mathematics & Statistics',
+  '29':'Military Technologies',
+  '30':'Interdisciplinary Studies',
+  '31':'Kinesiology & Recreation',
+  '38':'Philosophy & Ethics',
+  '39':'Theology & Ministry',
+  '40':'Physical Sciences',
+  '41':'Science Technologies',
+  '42':'Psychology',
+  '43':'Criminal Justice',
+  '44':'Public Administration & Policy',
+  '45':'Social Sciences',
+  '46':'Construction Trades',
+  '47':'Mechanic & Repair Technology',
+  '48':'Precision Manufacturing',
+  '49':'Transportation & Logistics',
+  '50':'Fine Arts & Design',
+  '51':'Health Sciences',
+  '52':'Business & Management',
+  '54':'History',
+};
+
+const CRED = {1:'Certificate',2:"Associate's",3:"Bachelor's",4:'Post-Bacc Cert',5:"Master's",6:'Doctoral',7:'Professional',8:'Grad Certificate'};
+
+
+// Base fields to always request from programs endpoint
+const PROG_FIELDS_BASE = 'unit_id,school.name,code,credential.level,credential.title,title';
+
+// Year label lookup by regex pattern against key name
+const YEAR_PATTERNS = [
+  { regex: /1.?yr/i,  label: '1 Year After' },
+  { regex: /2.?yr/i,  label: '2 Years After' },
+  { regex: /3.?yr/i,  label: '3 Years After' },
+  { regex: /4.?yr/i,  label: '4 Years After' },
+  { regex: /5.?yr/i,  label: '5 Years After' },
+  { regex: /6.?yr/i,  label: '6 Years After' },
+];
+
+/* ─────────────────────────────────────────────
+   STATE
+───────────────────────────────────────────── */
+let allPrograms    = [];
+let availYears     = [];   // { key, label } entries that have data in API response
+let availCreds     = [];   // credential levels that have data
+let selCred        = 3;
+let selYear        = null;
+let mainChart      = null;
+let lineChart2     = null;
+let currentSchool  = null;
+
+/* ─────────────────────────────────────────────
+   UTILS
+───────────────────────────────────────────── */
+const fmt = v => v != null ? new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(v) : '—';
+const fmtK = v => v != null ? '$'+(v/1000).toFixed(0)+'k' : '';
+
+function cipName(code, title) {
+  if (!code) return title || 'Unknown';
+  const prefix = String(code).padStart(6,'0').slice(0,2);
+  return CIP[prefix] || title || `CIP ${code}`;
+}
+
+function debounce(fn, ms) {
+  let t; return (...a) => { clearTimeout(t); t = setTimeout(()=>fn(...a), ms); };
+}
+
+/* ─────────────────────────────────────────────
+   API
+───────────────────────────────────────────── */
+async function searchSchools(q) {
+  const p = new URLSearchParams({
+    'school.name': q,
+    'fields': 'id,school.name,school.city,school.state',
+    'per_page': 8,
+    'api_key': API_KEY,
+  });
+  const r = await fetch(`${API_BASE}/schools/?${p}`);
+  if (!r.ok) throw new Error(`Search failed: ${r.status}`);
+  const d = await r.json();
+  return d.results || [];
+}
+
+async function fetchPrograms(schoolId) {
+  // ── Step 1: Discovery call (1 record, no field filter) to learn what keys exist ──
+  const discResp = await fetch(`${API_BASE}/programs/?${new URLSearchParams({
+    'school.id': schoolId, 'per_page': 1, 'api_key': API_KEY,
+  })}`);
+  if (!discResp.ok) throw new Error(`API error ${discResp.status}`);
+  const discData = await discResp.json();
+  if (!discData.results?.length) return { programs: [], years: [] };
+
+  const sampleKeys = Object.keys(discData.results[0]);
+  console.log('[Scorecard] All program fields:', sampleKeys);
+
+  // Auto-detect earnings keys (exclude count/pct/share/threshold fields)
+  const earnKeys = sampleKeys.filter(k =>
+    /earn/i.test(k) && !/count|pct|share|thresh|ne_|nott/i.test(k)
+  );
+  console.log('[Scorecard] Earnings keys found:', earnKeys);
+
+  // Map to labeled year objects using pattern matching
+  let years = [];
+  const usedKeys = new Set();
+  for (const { regex, label } of YEAR_PATTERNS) {
+    // prefer "mdn" (median) over other earn fields for the same year
+    const key = earnKeys.find(k => regex.test(k) && /mdn|median/i.test(k) && !usedKeys.has(k))
+             || earnKeys.find(k => regex.test(k) && !usedKeys.has(k));
+    if (key) { years.push({ key, label }); usedKeys.add(key); }
+  }
+  // Fallback: any remaining earn keys we didn't categorize
+  if (!years.length) {
+    earnKeys.forEach((key, i) => years.push({ key, label: `Period ${i + 1}` }));
+  }
+
+  const total = discData.metadata?.total ?? 1;
+  const fields = [PROG_FIELDS_BASE, ...years.map(y => y.key)].join(',');
+
+  // ── Step 2: Paginated fetch with specific fields ──
+  let page = 0, all = [];
+  do {
+    const r = await fetch(`${API_BASE}/programs/?${new URLSearchParams({
+      'school.id': schoolId, fields, 'per_page': 100, 'page': page, 'api_key': API_KEY,
+    })}`);
+    if (!r.ok) throw new Error(`Programs fetch p${page} failed: ${r.status}`);
+    const d = await r.json();
+    if (!d.results?.length) break;
+    all = all.concat(d.results);
+    page++;
+  } while (all.length < total);
+
+  return { programs: all, years };
+}
+
+/* ─────────────────────────────────────────────
+   DATA PROCESSING
+───────────────────────────────────────────── */
+function detectAvailable(programs, years) {
+  // Filter to years that actually have non-null data
+  const activeYears = years.filter(e =>
+    programs.some(p => p[e.key] != null)
+  );
+  // Which credential levels have data?
+  const creds = [...new Set(programs.map(p => p['credential.level']))]
+    .filter(Boolean)
+    .filter(lv => programs.some(p =>
+      p['credential.level'] === lv &&
+      activeYears.some(e => p[e.key] != null)
+    ))
+    .sort((a, b) => a - b);
+  return { years: activeYears, creds };
+}
+
+function getChartData(programs, credLevel, earnKey) {
+  // Filter by cred level and non-null earnings
+  const rows = programs.filter(p =>
+    p['credential.level'] === credLevel && p[earnKey] != null
+  );
+  if (!rows.length) return [];
+
+  // Group by 2-digit CIP, take max earnings within group
+  const map = {};
+  for (const p of rows) {
+    const prefix = String(p.code || '').padStart(6,'0').slice(0,2);
+    const name   = cipName(p.code, p.title);
+    const earn   = p[earnKey];
+    if (!map[prefix] || map[prefix].earn < earn) {
+      map[prefix] = { name, earn, raw: p };
+    }
+  }
+  // Sort descending
+  return Object.values(map).sort((a,b) => b.earn - a.earn);
+}
+
+/* ─────────────────────────────────────────────
+   CHART RENDERING
+───────────────────────────────────────────── */
+function renderBarChart(data) {
+  const wrap = document.getElementById('mainChartWrap');
+  if (!data.length) {
+    wrap.innerHTML = '<div class="empty-box">No earnings data available for this selection.</div>';
+    return;
+  }
+
+  const h = Math.max(320, data.length * 34 + 70);
+  wrap.innerHTML = `<div class="chart-canvas-wrap" style="height:${h}px"><canvas id="barChart"></canvas></div>`;
+  const ctx = document.getElementById('barChart').getContext('2d');
+  if (mainChart) mainChart.destroy();
+
+  const US_MEDIAN = 59000; // approximate US individual median earnings
+
+  mainChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: data.map(d => d.name),
+      datasets: [{
+        data: data.map(d => d.earn),
+        backgroundColor: data.map((d, i) => {
+          // gradient from accent to dimmer blue-purple
+          const t = i / Math.max(data.length - 1, 1);
+          const r = Math.round(56  + t * (120 - 56));
+          const g = Math.round(189 + t * ( 80 - 189));
+          const b = Math.round(248 + t * (210 - 248));
+          return `rgba(${r},${g},${b},0.85)`;
+        }),
+        borderRadius: 4,
+        borderSkipped: false,
+        barThickness: 22,
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 700, easing: 'easeOutQuart' },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#1e1e28',
+          borderColor: '#31313e',
+          borderWidth: 1,
+          titleColor: '#e2e8f0',
+          bodyColor: '#8892a4',
+          padding: 10,
+          callbacks: {
+            label: ctx => ` ${fmt(ctx.raw)} median`,
+          }
+        },
+        annotation: {
+          annotations: {
+            usMedian: {
+              type: 'line',
+              xMin: US_MEDIAN,
+              xMax: US_MEDIAN,
+              borderColor: 'rgba(251,191,36,0.35)',
+              borderWidth: 1.5,
+              borderDash: [5,4],
+              label: {
+                content: 'US Median',
+                display: true,
+                position: 'start',
+                yAdjust: -10,
+                color: 'rgba(251,191,36,0.55)',
+                font: { size: 9.5, weight: '500' },
+                backgroundColor: 'transparent',
+                padding: 0,
+              }
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          beginAtZero: true,
+          grid: { color: 'rgba(255,255,255,0.04)' },
+          border: { display: false },
+          ticks: {
+            color: '#525870',
+            font: { size: 11 },
+            callback: v => fmtK(v),
+          }
+        },
+        y: {
+          grid: { display: false },
+          border: { display: false },
+          ticks: {
+            color: '#8892a4',
+            font: { size: 12 },
+            padding: 4,
+          }
+        }
+      }
+    }
+  });
+
+  // chart note
+  document.getElementById('chartNote').textContent =
+    '* Dashed line marks approximate U.S. individual median earnings (~$59k). ' +
+    'Earnings for students who received federal financial aid; values suppressed when n < 30.';
+}
+
+function renderLineChart(programs, credLevel) {
+  const card2 = document.getElementById('card2');
+  const subEl  = document.getElementById('card2Sub');
+
+  // Only show if 2+ earn years available
+  const yearsWithData = availYears.filter(e =>
+    programs.some(p => p['credential.level'] === credLevel && p[e.key] != null)
+  );
+  if (yearsWithData.length < 2) { card2.style.display = 'none'; return; }
+  card2.style.display = 'block';
+
+  // Pick top 6 majors by their best year
+  const bestKey = yearsWithData[yearsWithData.length - 1].key;
+  const top = getChartData(programs, credLevel, bestKey).slice(0, 6);
+  if (!top.length) { card2.style.display = 'none'; return; }
+
+  subEl.textContent = `Top majors — median earnings at each reported year (${CRED[credLevel] || 'degree'})`;
+
+  const COLORS = ['#38bdf8','#a78bfa','#4ade80','#fbbf24','#f472b6','#34d399'];
+  const labels  = yearsWithData.map(e => e.label);
+
+  const datasets = top.map((maj, i) => {
+    const row = programs.find(p =>
+      p['credential.level'] === credLevel &&
+      cipName(p.code, p.title) === maj.name
+    ) || {};
+    return {
+      label: maj.name,
+      data: yearsWithData.map(e => row[e.key] ?? null),
+      borderColor: COLORS[i % COLORS.length],
+      backgroundColor: COLORS[i % COLORS.length] + '20',
+      pointBackgroundColor: COLORS[i % COLORS.length],
+      borderWidth: 2,
+      pointRadius: 4,
+      pointHoverRadius: 6,
+      tension: 0.35,
+      spanGaps: true,
+    };
+  });
+
+  const ctx2 = document.getElementById('lineChart').getContext('2d');
+  if (lineChart2) lineChart2.destroy();
+
+  lineChart2 = new Chart(ctx2, {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 700, easing: 'easeOutQuart' },
+      plugins: {
+        legend: {
+          display: true,
+          position: 'bottom',
+          labels: {
+            color: '#8892a4',
+            font: { size: 11 },
+            boxWidth: 12,
+            padding: 14,
+          }
+        },
+        tooltip: {
+          backgroundColor: '#1e1e28',
+          borderColor: '#31313e',
+          borderWidth: 1,
+          titleColor: '#e2e8f0',
+          bodyColor: '#8892a4',
+          padding: 10,
+          callbacks: {
+            label: ctx => ` ${ctx.dataset.label}: ${fmt(ctx.raw)}`,
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { color: 'rgba(255,255,255,0.04)' },
+          border: { display: false },
+          ticks: { color: '#525870', font: { size: 11 } },
+        },
+        y: {
+          grid: { color: 'rgba(255,255,255,0.04)' },
+          border: { display: false },
+          ticks: {
+            color: '#525870',
+            font: { size: 11 },
+            callback: v => fmtK(v),
+          }
+        }
+      }
+    }
+  });
+}
+
+/* ─────────────────────────────────────────────
+   STATS CARDS
+───────────────────────────────────────────── */
+function renderStats(data) {
+  const el = document.getElementById('statsRow');
+  if (!data.length) { el.innerHTML = ''; return; }
+  const top    = data[0];
+  const bot    = data[data.length - 1];
+  const med    = data[Math.floor(data.length / 2)].earn;
+  const spread = top.earn - bot.earn;
+  el.innerHTML = `
+    <div class="stat-card">
+      <div class="stat-label">Highest Earning Major</div>
+      <div class="stat-val sm">${top.name}</div>
+      <div class="stat-note">${fmt(top.earn)} / year</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Median Across Majors</div>
+      <div class="stat-val">${fmt(med)}</div>
+      <div class="stat-note">Middle of reported majors</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Earnings Spread</div>
+      <div class="stat-val">${fmt(spread)}</div>
+      <div class="stat-note">Top vs. bottom major</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Majors Reported</div>
+      <div class="stat-val">${data.length}</div>
+      <div class="stat-note">With earnings data</div>
+    </div>
+  `;
+}
+
+/* ─────────────────────────────────────────────
+   UI CONTROLS
+───────────────────────────────────────────── */
+function buildCredTabs() {
+  const el = document.getElementById('credTabs');
+  el.innerHTML = '';
+  // Prefer Bachelor's (3), else first available
+  if (!availCreds.includes(selCred)) selCred = availCreds[0];
+  availCreds.forEach(lv => {
+    const btn = document.createElement('button');
+    btn.className = 'tab' + (lv === selCred ? ' active' : '');
+    btn.textContent = CRED[lv] || `Level ${lv}`;
+    btn.onclick = () => {
+      selCred = lv;
+      el.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      btn.classList.add('active');
+      refreshViz();
+    };
+    el.appendChild(btn);
+  });
+}
+
+function buildYearTabs() {
+  const el = document.getElementById('yearTabs');
+  el.innerHTML = '';
+  if (!availYears.find(e => e.key === selYear)) selYear = availYears[0]?.key;
+  availYears.forEach(e => {
+    const btn = document.createElement('button');
+    btn.className = 'tab' + (e.key === selYear ? ' active' : '');
+    btn.textContent = e.label;
+    btn.onclick = () => {
+      selYear = e.key;
+      el.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      btn.classList.add('active');
+      refreshViz();
+    };
+    el.appendChild(btn);
+  });
+}
+
+function updateSubtitle() {
+  const yl = availYears.find(e => e.key === selYear)?.label || '';
+  const cl = CRED[selCred] || '';
+  document.getElementById('plotSub').textContent =
+    `Median earnings ${yl} graduation · ${cl} degrees`;
+}
+
+function refreshViz() {
+  updateSubtitle();
+  const data = getChartData(allPrograms, selCred, selYear);
+  renderBarChart(data);
+  renderStats(data);
+  renderLineChart(allPrograms, selCred);
+}
+
+/* ─────────────────────────────────────────────
+   SELECT SCHOOL
+───────────────────────────────────────────── */
+async function selectSchool(school) {
+  closeSuggestions();
+  document.getElementById('schoolSearch').value = school['school.name'];
+  currentSchool = school;
+
+  document.getElementById('schoolTitle').textContent = school['school.name'];
+  document.getElementById('plotSub').textContent = 'Median earnings by major';
+  document.getElementById('statsRow').innerHTML = '';
+  document.getElementById('credTabs').innerHTML = '';
+  document.getElementById('yearTabs').innerHTML = '';
+  document.getElementById('card2').style.display = 'none';
+  document.getElementById('chartNote').textContent = '';
+  document.getElementById('mainChartWrap').innerHTML =
+    '<div class="loading-box"><div class="spinner"></div><span>Loading earnings data…</span></div>';
+
+  const resultsEl = document.getElementById('results');
+  resultsEl.classList.add('visible');
+  setTimeout(() => resultsEl.scrollIntoView({ behavior:'smooth', block:'start' }), 80);
+
+  try {
+    const fetched = await fetchPrograms(school.id);
+    allPrograms = fetched.programs;
+
+    if (!allPrograms.length) {
+      document.getElementById('mainChartWrap').innerHTML =
+        '<div class="empty-box">No program data found for this school.</div>';
+      return;
+    }
+
+    const detected = detectAvailable(allPrograms, fetched.years);
+    availYears = detected.years;
+    availCreds = detected.creds;
+
+    if (!availYears.length || !availCreds.length) {
+      document.getElementById('mainChartWrap').innerHTML =
+        '<div class="empty-box">Earnings data not available for this school\'s programs.</div>';
+      return;
+    }
+
+    // Default to Bachelor's if available
+    if (!availCreds.includes(selCred)) selCred = availCreds[0];
+    selYear = availYears[0].key;
+
+    buildCredTabs();
+    buildYearTabs();
+    refreshViz();
+
+  } catch (err) {
+    console.error(err);
+    document.getElementById('mainChartWrap').innerHTML =
+      `<div class="empty-box">Error loading data: ${err.message}</div>`;
+  }
+}
+
+/* ─────────────────────────────────────────────
+   AUTOCOMPLETE
+───────────────────────────────────────────── */
+let lastSchools = [];
+
+function closeSuggestions() {
+  document.getElementById('suggestions').classList.remove('open');
+}
+
+const doSearch = debounce(async q => {
+  const el = document.getElementById('suggestions');
+  if (!q || q.length < 2) { closeSuggestions(); return; }
+  try {
+    lastSchools = await searchSchools(q);
+    if (!lastSchools.length) {
+      el.innerHTML = '<div class="sug-empty">No schools found.</div>';
+    } else {
+      el.innerHTML = lastSchools.map((s, i) => `
+        <div class="sug-item" data-idx="${i}">
+          <div class="sug-name">${s['school.name']}</div>
+          <div class="sug-loc">${s['school.city'] || ''}, ${s['school.state'] || ''}</div>
+        </div>
+      `).join('');
+      el.querySelectorAll('.sug-item').forEach(item => {
+        item.addEventListener('click', () => selectSchool(lastSchools[+item.dataset.idx]));
+      });
+    }
+    el.classList.add('open');
+  } catch (e) {
+    console.error(e);
+  }
+}, 280);
+
+document.getElementById('schoolSearch').addEventListener('input', e => doSearch(e.target.value.trim()));
+document.getElementById('schoolSearch').addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeSuggestions();
+});
+document.addEventListener('click', e => {
+  if (!document.getElementById('searchWrap').contains(e.target)) closeSuggestions();
+});
+</script>
+</body>
+</html>
