@@ -473,7 +473,11 @@ async function searchSchools(q) {
     'api_key': API_KEY,
   });
   const r = await fetch(`${API_BASE}/schools/?${p}`);
-  if (!r.ok) throw new Error(`Search failed: ${r.status}`);
+  if (!r.ok) {
+    if (r.status === 429) throw new Error('Rate limit reached — please wait a moment and try again.');
+    if (r.status === 403) throw new Error('API key rejected (403). Try refreshing the page.');
+    throw new Error(`API error ${r.status}`);
+  }
   const d = await r.json();
   return d.results || [];
 }
@@ -927,6 +931,11 @@ function closeSuggestions() {
 async function searchAndShow(q) {
   const el = document.getElementById('suggestions');
   if (!q || q.length < 2) { closeSuggestions(); return; }
+
+  // Show loading indicator immediately
+  el.innerHTML = '<div class="sug-empty">Searching…</div>';
+  el.classList.add('open');
+
   try {
     lastSchools = await searchSchools(q);
     if (!lastSchools.length) {
@@ -942,9 +951,9 @@ async function searchAndShow(q) {
         item.addEventListener('click', () => selectSchool(lastSchools[+item.dataset.idx]));
       });
     }
-    el.classList.add('open');
   } catch (e) {
     console.error(e);
+    el.innerHTML = `<div class="sug-empty">${e.message || 'Search failed — check your connection.'}</div>`;
   }
 }
 
