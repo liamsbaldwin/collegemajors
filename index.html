@@ -917,7 +917,7 @@ function closeSuggestions() {
   document.getElementById('suggestions').classList.remove('open');
 }
 
-const doSearch = debounce(async q => {
+async function searchAndShow(q) {
   const el = document.getElementById('suggestions');
   if (!q || q.length < 2) { closeSuggestions(); return; }
   try {
@@ -939,11 +939,23 @@ const doSearch = debounce(async q => {
   } catch (e) {
     console.error(e);
   }
-}, 280);
+}
+
+const doSearch = debounce(q => searchAndShow(q), 280);
 
 document.getElementById('schoolSearch').addEventListener('input', e => doSearch(e.target.value.trim()));
 document.getElementById('schoolSearch').addEventListener('keydown', e => {
-  if (e.key === 'Escape') closeSuggestions();
+  if (e.key === 'Escape') { closeSuggestions(); return; }
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    const open = document.getElementById('suggestions').classList.contains('open');
+    if (open && lastSchools.length) {
+      selectSchool(lastSchools[0]);
+    } else {
+      const q = e.target.value.trim();
+      if (q.length >= 2) searchAndShow(q);
+    }
+  }
 });
 document.addEventListener('click', e => {
   if (!document.getElementById('searchWrap').contains(e.target)) closeSuggestions();
