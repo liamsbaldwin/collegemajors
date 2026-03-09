@@ -371,8 +371,26 @@
    CONFIG
 ───────────────────────────────────────────── */
 // Get a free key at https://collegescorecard.ed.gov/data/documentation/
-const API_KEY  = 'DEMO_KEY';
 const API_BASE = 'https://api.data.ed.gov/student/v1';
+function getApiKey() { return localStorage.getItem('scorecard_api_key') || 'DEMO_KEY'; }
+
+/* ─────────────────────────────────────────────
+   SESSION CACHE  (reduces API calls dramatically)
+───────────────────────────────────────────── */
+const cache = {
+  get(k) {
+    try {
+      const raw = sessionStorage.getItem('sc__' + k);
+      if (!raw) return null;
+      const { data, exp } = JSON.parse(raw);
+      if (Date.now() > exp) { sessionStorage.removeItem('sc__' + k); return null; }
+      return data;
+    } catch { return null; }
+  },
+  set(k, data, ttlMs = 600_000) {
+    try { sessionStorage.setItem('sc__' + k, JSON.stringify({ data, exp: Date.now() + ttlMs })); } catch {}
+  },
+};
 
 /* ─────────────────────────────────────────────
    CIP 2-digit → colloquial name
@@ -465,51 +483,69 @@ function debounce(fn, ms) {
 /* ─────────────────────────────────────────────
    API
 ───────────────────────────────────────────── */
+function checkApiError(d, status) {
+  // api.data.gov sometimes returns HTTP 200 with an error body
+  if (d?.error) {
+    const msg = d.error.message || JSON.stringify(d.error);
+    if (/rate.limit|over.*limit/i.test(msg)) throw new Error('RATE_LIMIT');
+    throw new Error(msg);
+  }
+  if (!d?.results && status !== 200) throw new Error(`API error ${status}`);
+}
+
+async function apiFetch(url) {
+  const r = await fetch(url);
+  if (r.status === 429) throw new Error('RATE_LIMIT');
+  if (r.status === 403) throw new Error('API_KEY_BAD');
+  if (!r.ok) throw new Error(`API error ${r.status}`);
+  const d = await r.json();
+  checkApiError(d, r.status);
+  return d;
+}
+
 async function searchSchools(q) {
+  const cacheKey = 'search:' + q.toLowerCase();
+  const cached = cache.get(cacheKey);
+  if (cached) return cached;
+
   const p = new URLSearchParams({
     'school.name': q,
     'fields': 'id,school.name,school.city,school.state',
     'per_page': 8,
-    'api_key': API_KEY,
+    'api_key': getApiKey(),
   });
-  const r = await fetch(`${API_BASE}/schools/?${p}`);
-  if (!r.ok) {
-    if (r.status === 429) throw new Error('Rate limit reached — please wait a moment and try again.');
-    if (r.status === 403) throw new Error('API key rejected (403). Try refreshing the page.');
-    throw new Error(`API error ${r.status}`);
-  }
-  const d = await r.json();
-  return d.results || [];
+  const d = await apiFetch(`${API_BASE}/schools/?${p}`);
+  const results = d.results || [];
+  cache.set(cacheKey, results);
+  return results;
 }
 
 async function fetchPrograms(schoolId) {
-  // ── Step 1: Discovery call (1 record, no field filter) to learn what keys exist ──
-  const discResp = await fetch(`${API_BASE}/programs/?${new URLSearchParams({
-    'school.id': schoolId, 'per_page': 1, 'api_key': API_KEY,
+  const cacheKey = 'programs:' + schoolId;
+  const cached = cache.get(cacheKey, 3_600_000);
+  if (cached) return cached;
+
+  // ── Step 1: Discovery call (1 record) to learn what keys exist ──
+  const discData = await apiFetch(`${API_BASE}/programs/?${new URLSearchParams({
+    'school.id': schoolId, 'per_page': 1, 'api_key': getApiKey(),
   })}`);
-  if (!discResp.ok) throw new Error(`API error ${discResp.status}`);
-  const discData = await discResp.json();
   if (!discData.results?.length) return { programs: [], years: [] };
 
   const sampleKeys = Object.keys(discData.results[0]);
-  console.log('[Scorecard] All program fields:', sampleKeys);
 
   // Auto-detect earnings keys (exclude count/pct/share/threshold fields)
   const earnKeys = sampleKeys.filter(k =>
     /earn/i.test(k) && !/count|pct|share|thresh|ne_|nott/i.test(k)
   );
-  console.log('[Scorecard] Earnings keys found:', earnKeys);
 
   // Map to labeled year objects using pattern matching
   let years = [];
   const usedKeys = new Set();
   for (const { regex, label } of YEAR_PATTERNS) {
-    // prefer "mdn" (median) over other earn fields for the same year
     const key = earnKeys.find(k => regex.test(k) && /mdn|median/i.test(k) && !usedKeys.has(k))
              || earnKeys.find(k => regex.test(k) && !usedKeys.has(k));
     if (key) { years.push({ key, label }); usedKeys.add(key); }
   }
-  // Fallback: any remaining earn keys we didn't categorize
   if (!years.length) {
     earnKeys.forEach((key, i) => years.push({ key, label: `Period ${i + 1}` }));
   }
@@ -520,17 +556,17 @@ async function fetchPrograms(schoolId) {
   // ── Step 2: Paginated fetch with specific fields ──
   let page = 0, all = [];
   do {
-    const r = await fetch(`${API_BASE}/programs/?${new URLSearchParams({
-      'school.id': schoolId, fields, 'per_page': 100, 'page': page, 'api_key': API_KEY,
+    const d = await apiFetch(`${API_BASE}/programs/?${new URLSearchParams({
+      'school.id': schoolId, fields, 'per_page': 100, 'page': page, 'api_key': getApiKey(),
     })}`);
-    if (!r.ok) throw new Error(`Programs fetch p${page} failed: ${r.status}`);
-    const d = await r.json();
     if (!d.results?.length) break;
     all = all.concat(d.results);
     page++;
   } while (all.length < total);
 
-  return { programs: all, years };
+  const result = { programs: all, years };
+  cache.set(cacheKey, result, 3_600_000);
+  return result;
 }
 
 /* ─────────────────────────────────────────────
@@ -953,7 +989,38 @@ async function searchAndShow(q) {
     }
   } catch (e) {
     console.error(e);
-    el.innerHTML = `<div class="sug-empty">${e.message || 'Search failed — check your connection.'}</div>`;
+    if (e.message === 'RATE_LIMIT' || e.message === 'API_KEY_BAD') {
+      el.innerHTML = `
+        <div class="sug-empty" style="padding:14px 18px">
+          <div style="color:var(--yellow);font-size:12.5px;font-weight:600;margin-bottom:6px">
+            ${e.message === 'RATE_LIMIT' ? 'API rate limit reached (DEMO_KEY)' : 'API key rejected'}
+          </div>
+          <div style="font-size:11.5px;color:var(--tx2);margin-bottom:10px">
+            Paste your free key from
+            <a href="https://collegescorecard.ed.gov/data/documentation/" target="_blank"
+               style="color:var(--accent);text-decoration:none">collegescorecard.ed.gov</a>
+          </div>
+          <div style="display:flex;gap:6px">
+            <input id="apiKeyInput" placeholder="Your API key…"
+              style="flex:1;padding:6px 10px;background:var(--bg3);border:1px solid var(--border2);
+                     border-radius:7px;color:var(--tx1);font-size:12px;font-family:inherit;outline:none">
+            <button id="apiKeySave"
+              style="padding:6px 12px;background:var(--accent);border:none;border-radius:7px;
+                     color:#000;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">
+              Save
+            </button>
+          </div>
+        </div>`;
+      document.getElementById('apiKeySave').addEventListener('click', () => {
+        const k = document.getElementById('apiKeyInput').value.trim();
+        if (k) {
+          localStorage.setItem('scorecard_api_key', k);
+          searchAndShow(document.getElementById('schoolSearch').value.trim());
+        }
+      });
+    } else {
+      el.innerHTML = `<div class="sug-empty">Search error: ${e.message}</div>`;
+    }
   }
 }
 
