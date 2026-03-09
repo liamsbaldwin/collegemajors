@@ -413,26 +413,25 @@ const CIP = {
 
 const CRED = {1:'Certificate',2:"Associate's",3:"Bachelor's",4:'Post-Bacc Cert',5:"Master's",6:'Doctoral',7:'Professional',8:'Grad Certificate'};
 
-// Ordered list of earnings field candidates (API returns lowercase)
-const EARN_FIELDS = [
-  { key:'earn_mdn_hi_1yr', label:'1 Year After' },
-  { key:'earn_mdn_hi_2yr', label:'2 Years After' },
-  { key:'earn_ne_mdn_3yr', label:'3 Years After' },
-  { key:'earn_mdn_4yr',    label:'4 Years After' },
-  { key:'earn_mdn_5yr',    label:'5 Years After' },
-];
 
-// Fields to request from programs endpoint
-const PROG_FIELDS = [
-  'unit_id','school.name','code','credential.level','credential.title','title',
-  ...EARN_FIELDS.map(e => e.key),
-].join(',');
+// Base fields to always request from programs endpoint
+const PROG_FIELDS_BASE = 'unit_id,school.name,code,credential.level,credential.title,title';
+
+// Year label lookup by regex pattern against key name
+const YEAR_PATTERNS = [
+  { regex: /1.?yr/i,  label: '1 Year After' },
+  { regex: /2.?yr/i,  label: '2 Years After' },
+  { regex: /3.?yr/i,  label: '3 Years After' },
+  { regex: /4.?yr/i,  label: '4 Years After' },
+  { regex: /5.?yr/i,  label: '5 Years After' },
+  { regex: /6.?yr/i,  label: '6 Years After' },
+];
 
 /* ─────────────────────────────────────────────
    STATE
 ───────────────────────────────────────────── */
 let allPrograms    = [];
-let availYears     = [];   // EARN_FIELDS entries that have data
+let availYears     = [];   // { key, label } entries that have data in API response
 let availCreds     = [];   // credential levels that have data
 let selCred        = 3;
 let selYear        = null;
@@ -473,43 +472,73 @@ async function searchSchools(q) {
 }
 
 async function fetchPrograms(schoolId) {
-  let page = 0, all = [], total = null;
+  // ── Step 1: Discovery call (1 record, no field filter) to learn what keys exist ──
+  const discResp = await fetch(`${API_BASE}/programs/?${new URLSearchParams({
+    'school.id': schoolId, 'per_page': 1, 'api_key': API_KEY,
+  })}`);
+  if (!discResp.ok) throw new Error(`API error ${discResp.status}`);
+  const discData = await discResp.json();
+  if (!discData.results?.length) return { programs: [], years: [] };
+
+  const sampleKeys = Object.keys(discData.results[0]);
+  console.log('[Scorecard] All program fields:', sampleKeys);
+
+  // Auto-detect earnings keys (exclude count/pct/share/threshold fields)
+  const earnKeys = sampleKeys.filter(k =>
+    /earn/i.test(k) && !/count|pct|share|thresh|ne_|nott/i.test(k)
+  );
+  console.log('[Scorecard] Earnings keys found:', earnKeys);
+
+  // Map to labeled year objects using pattern matching
+  let years = [];
+  const usedKeys = new Set();
+  for (const { regex, label } of YEAR_PATTERNS) {
+    // prefer "mdn" (median) over other earn fields for the same year
+    const key = earnKeys.find(k => regex.test(k) && /mdn|median/i.test(k) && !usedKeys.has(k))
+             || earnKeys.find(k => regex.test(k) && !usedKeys.has(k));
+    if (key) { years.push({ key, label }); usedKeys.add(key); }
+  }
+  // Fallback: any remaining earn keys we didn't categorize
+  if (!years.length) {
+    earnKeys.forEach((key, i) => years.push({ key, label: `Period ${i + 1}` }));
+  }
+
+  const total = discData.metadata?.total ?? 1;
+  const fields = [PROG_FIELDS_BASE, ...years.map(y => y.key)].join(',');
+
+  // ── Step 2: Paginated fetch with specific fields ──
+  let page = 0, all = [];
   do {
-    const p = new URLSearchParams({
-      'school.id': schoolId,
-      'fields': PROG_FIELDS,
-      'per_page': 100,
-      'page': page,
-      'api_key': API_KEY,
-    });
-    const r = await fetch(`${API_BASE}/programs/?${p}`);
-    if (!r.ok) throw new Error(`Programs fetch failed: ${r.status}`);
+    const r = await fetch(`${API_BASE}/programs/?${new URLSearchParams({
+      'school.id': schoolId, fields, 'per_page': 100, 'page': page, 'api_key': API_KEY,
+    })}`);
+    if (!r.ok) throw new Error(`Programs fetch p${page} failed: ${r.status}`);
     const d = await r.json();
-    if (!d.results || d.results.length === 0) break;
-    if (total === null) total = d.metadata?.total ?? d.results.length;
+    if (!d.results?.length) break;
     all = all.concat(d.results);
     page++;
   } while (all.length < total);
-  return all;
+
+  return { programs: all, years };
 }
 
 /* ─────────────────────────────────────────────
    DATA PROCESSING
 ───────────────────────────────────────────── */
-function detectAvailable(programs) {
-  // Which earn fields have any non-null data?
-  const years = EARN_FIELDS.filter(e =>
+function detectAvailable(programs, years) {
+  // Filter to years that actually have non-null data
+  const activeYears = years.filter(e =>
     programs.some(p => p[e.key] != null)
   );
-  // Which credential levels have any data with any earn year?
+  // Which credential levels have data?
   const creds = [...new Set(programs.map(p => p['credential.level']))]
     .filter(Boolean)
     .filter(lv => programs.some(p =>
       p['credential.level'] === lv &&
-      years.some(e => p[e.key] != null)
+      activeYears.some(e => p[e.key] != null)
     ))
-    .sort((a,b) => a-b);
-  return { years, creds };
+    .sort((a, b) => a - b);
+  return { years: activeYears, creds };
 }
 
 function getChartData(programs, credLevel, earnKey) {
@@ -645,7 +674,7 @@ function renderLineChart(programs, credLevel) {
   const subEl  = document.getElementById('card2Sub');
 
   // Only show if 2+ earn years available
-  const yearsWithData = EARN_FIELDS.filter(e =>
+  const yearsWithData = availYears.filter(e =>
     programs.some(p => p['credential.level'] === credLevel && p[e.key] != null)
   );
   if (yearsWithData.length < 2) { card2.style.display = 'none'; return; }
@@ -845,10 +874,8 @@ async function selectSchool(school) {
   setTimeout(() => resultsEl.scrollIntoView({ behavior:'smooth', block:'start' }), 80);
 
   try {
-    allPrograms = await fetchPrograms(school.id);
-
-    // Debug: log keys from first result so field names can be verified
-    if (allPrograms[0]) console.log('[Debug] Program fields:', Object.keys(allPrograms[0]));
+    const fetched = await fetchPrograms(school.id);
+    allPrograms = fetched.programs;
 
     if (!allPrograms.length) {
       document.getElementById('mainChartWrap').innerHTML =
@@ -856,7 +883,7 @@ async function selectSchool(school) {
       return;
     }
 
-    const detected = detectAvailable(allPrograms);
+    const detected = detectAvailable(allPrograms, fetched.years);
     availYears = detected.years;
     availCreds = detected.creds;
 
