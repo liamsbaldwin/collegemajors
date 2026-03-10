@@ -28,7 +28,7 @@
       --purple:    #a78bfa;
     }
 
-    html { scroll-behavior: smooth; }
+    html { scroll-behavior: smooth; overflow-x: hidden; }
 
     body {
       font-family: 'Inter', -apple-system, sans-serif;
@@ -38,6 +38,7 @@
       line-height: 1.5;
       display: flex;
       flex-direction: column;
+      overflow-x: hidden;
     }
 
     /* ── HEADER ── */
@@ -188,11 +189,12 @@
     .stat-val.sm { font-size: 14px; }
     .stat-note { font-size: 10.5px; color: var(--tx3); margin-top: 3px; }
     @media (max-width: 600px) {
-      .stat-card { padding: 11px 9px; }
+      .stats-row { gap: 6px; }
+      .stat-card { padding: 10px 8px; }
       .stat-val { font-size: 15px; }
       .stat-val.sm { font-size: 12px; }
-      .stat-label { font-size: 8.5px; letter-spacing: .04em; }
-      .stat-note { font-size: 9.5px; }
+      .stat-label { font-size: 8px; letter-spacing: .03em; }
+      .stat-note { font-size: 9px; }
     }
 
     /* Chart card */
@@ -207,6 +209,8 @@
       .chart-card { padding: 16px 10px 14px; border-radius: 12px; }
       .chart-card2 { padding: 16px 10px 14px; border-radius: 12px; }
       .results-wrap { padding: 0 10px 60px; }
+      .controls { gap: 12px; }
+      .ctrl-group { width: 100%; min-width: 0; }
     }
 
     /* Controls */
