@@ -520,75 +520,39 @@ async function fetchPrograms(schoolId) {
   const cached = cache.get(cacheKey);
   if (cached) return cached;
 
-  // ── Attempt 1: /programs/ endpoint (field-of-study flat dataset) ──
-  let rawProgs = [], earnKeys = [];
-  try {
-    const disc = await apiFetch(`${API_BASE}/programs/?${new URLSearchParams({
-      'school.id': schoolId, 'per_page': 1, 'api_key': getApiKey(),
-    })}`);
-    console.log('[Scorecard] /programs/ disc result[0]:', disc.results?.[0]);
+  // Earnings relative paths (within each program object)
+  const EARN_DEFS = [
+    { key: 'earn_3yr', field: 'earnings.highest.3_yr.overall_median_earnings', label: '3 Years After' },
+    { key: 'earn_4yr', field: 'earnings.4_yr.overall_median_earnings',         label: '4 Years After' },
+    { key: 'earn_5yr', field: 'earnings.5_yr.overall_median_earnings',         label: '5 Years After' },
+  ];
 
-    if (disc.results?.length) {
-      const sampleKeys = Object.keys(disc.results[0]);
-      earnKeys = sampleKeys.filter(k =>
-        /earn/i.test(k) && /mdn|median/i.test(k) && !/count|pct|share|thresh/i.test(k)
-      );
-      console.log('[Scorecard] /programs/ earn keys:', earnKeys);
+  const d = await apiFetch(`${API_BASE}/schools/?${new URLSearchParams({
+    'id': schoolId,
+    'fields': 'id,latest.programs.cip_4_digit',
+    'all_programs_nested': 'true',
+    'per_page': 1,
+    'api_key': getApiKey(),
+  })}`);
 
-      const total = disc.metadata?.total ?? 1;
-      const fields = ['unit_id','school.name','code','credential.level','title', ...earnKeys].join(',');
-      let page = 0, all = [];
-      do {
-        const r = await apiFetch(`${API_BASE}/programs/?${new URLSearchParams({
-          'school.id': schoolId, fields, 'per_page': 100, 'page': page, 'api_key': getApiKey(),
-        })}`);
-        if (!r.results?.length) break;
-        all = all.concat(r.results);
-        page++;
-      } while (all.length < total);
-      rawProgs = all;
-    }
-  } catch(e) {
-    console.warn('[Scorecard] /programs/ failed:', e.message, '— trying nested /schools/');
-  }
+  const school = d.results?.[0] || {};
+  const rawProgs = school['latest.programs.cip_4_digit'] || [];
+  console.log('[Scorecard] programs count:', rawProgs.length, '| sample:', rawProgs[0]);
 
-  // ── Attempt 2: nested inside /schools/ ──
-  if (!rawProgs.length) {
-    const d = await apiFetch(`${API_BASE}/schools/?${new URLSearchParams({
-      'id': schoolId, 'fields': 'id,latest.programs.cip_4digit',
-      'all_programs_nested': 'true', 'per_page': 1, 'api_key': getApiKey(),
-    })}`);
-    const school = d.results?.[0] || {};
-    console.log('[Scorecard] /schools/ keys:', Object.keys(school));
-    rawProgs = school['latest.programs.cip_4digit'] || [];
-    console.log('[Scorecard] nested rawProgs[0]:', rawProgs[0]);
-
-    if (rawProgs.length) {
-      earnKeys = Object.keys(rawProgs[0]).filter(k =>
-        /earn/i.test(k) && /mdn|median/i.test(k) && !/count|pct|share|thresh/i.test(k)
-      );
-    }
-  }
-
-  console.log('[Scorecard] total programs:', rawProgs.length, '| earnKeys:', earnKeys);
   if (!rawProgs.length) return { programs: [], years: [] };
 
-  const pick = (obj, ...keys) => { for (const k of keys) if (obj[k] != null) return obj[k]; return null; };
-
   const programs = rawProgs.map(p => {
-    const base = {
-      'code':             pick(p, 'code', 'cipcode', 'cip_code'),
-      'title':            pick(p, 'title', 'cipdesc', 'cip_desc') || '',
-      'credential.level': pick(p, 'credential.level', 'credlev', 'credential_level'),
+    const prog = {
+      'code':             p['code'] ?? null,
+      'title':            p['title'] || '',
+      'credential.level': p['credential.level'] ?? null,
     };
-    earnKeys.forEach(k => { base[k] = p[k] ?? null; });
-    return base;
+    EARN_DEFS.forEach(e => { prog[e.key] = p[e.field] ?? null; });
+    return prog;
   });
 
-  const YEAR_LABEL = {'1':'1 Year After','2':'2 Years After','3':'3 Years After','4':'4 Years After','5':'5 Years After'};
-  const years = earnKeys
-    .map(key => ({ key, label: YEAR_LABEL[key.match(/(\d)/)?.[1]] || key }))
-    .filter(y => programs.some(p => p[y.key] != null));
+  const years = EARN_DEFS.filter(e => programs.some(p => p[e.key] != null))
+                         .map(e => ({ key: e.key, label: e.label }));
 
   const result = { programs, years };
   cache.set(cacheKey, result, 3_600_000);
