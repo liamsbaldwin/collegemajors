@@ -458,10 +458,22 @@ let currentSchool  = null;
 const fmt = v => v != null ? new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(v) : '—';
 const fmtK = v => v != null ? '$'+(v/1000).toFixed(0)+'k' : '';
 
+function cip2prefix(code) {
+  if (!code) return null;
+  // Strip decimal point ("11.07" → "1107"), then parse
+  const s = String(code).replace('.', '');
+  const n = parseInt(s, 10);
+  if (isNaN(n)) return null;
+  // 4-digit CIP (e.g. 1107): prefix = floor(1107/100) = "11"
+  // 6-digit CIP (e.g. 110701): prefix = first 2 chars of zero-padded string
+  return s.length <= 4
+    ? String(Math.floor(n / 100)).padStart(2, '0')
+    : s.padStart(6, '0').slice(0, 2);
+}
+
 function cipName(code, title) {
-  if (!code) return title || 'Unknown';
-  const prefix = String(code).padStart(6,'0').slice(0,2);
-  return CIP[prefix] || title || `CIP ${code}`;
+  const prefix = cip2prefix(code);
+  return CIP[prefix] || title || (code ? `CIP ${code}` : 'Unknown');
 }
 
 function debounce(fn, ms) {
@@ -606,7 +618,7 @@ function getChartData(programs, credLevel, earnKey) {
   // Group by 2-digit CIP, take max earnings within group
   const map = {};
   for (const p of rows) {
-    const prefix = String(p.code || '').padStart(6,'0').slice(0,2);
+    const prefix = cip2prefix(p.code) ?? ('_' + (p.title || p.code));
     const name   = cipName(p.code, p.title);
     const earn   = p[earnKey];
     if (!map[prefix] || map[prefix].earn < earn) {
