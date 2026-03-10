@@ -787,9 +787,9 @@ async function fetchPrograms(schoolId) {
 
   // Known earnings subfields (relative path within each program object)
   const EARN_DEFS = [
-    { key: 'earn_3yr', field: 'earnings.highest.3_yr.overall_median_earnings', label: '3-Year' },
-    { key: 'earn_4yr', field: 'earnings.4_yr.overall_median_earnings',         label: '4-Year' },
-    { key: 'earn_5yr', field: 'earnings.5_yr.overall_median_earnings',         label: '5-Year' },
+    { key: 'earn_3yr', field: 'earnings.highest.3_yr.overall_median_earnings', label: '3-Year', cohort: '~2020 grads, measured 2023' },
+    { key: 'earn_4yr', field: 'earnings.4_yr.overall_median_earnings',         label: '4-Year', cohort: '~2019 grads, measured 2023' },
+    { key: 'earn_5yr', field: 'earnings.5_yr.overall_median_earnings',         label: '5-Year', cohort: '~2018 grads, measured 2023' },
   ];
 
   // Request specific subfields so the API actually includes earnings data
@@ -850,7 +850,7 @@ async function fetchPrograms(schoolId) {
 
   const years = EARN_DEFS
     .filter(e => programs.some(p => p[e.key] != null))
-    .map(e => ({ key: e.key, label: e.label }));
+    .map(e => ({ key: e.key, label: e.label, cohort: e.cohort }));
 
   const result = { programs, years };
   cache.set(cacheKey, result, 3_600_000);
@@ -981,15 +981,16 @@ function renderBarChart(data) {
     afterDraw(chart) {
       const meta = chart.getDatasetMeta(0);
       const c = chart.ctx;
+      const rightEdge = chart.chartArea.right - 4;
       c.save();
       c.font = '9px Inter, sans-serif';
       c.textBaseline = 'middle';
       c.textAlign = 'right';
+      c.fillStyle = 'rgba(255,255,255,0.32)';
       meta.data.forEach((bar, i) => {
         const n = data[i]?.n;
         if (!n) return;
-        c.fillStyle = 'rgba(255,255,255,0.22)';
-        c.fillText(`n=${n}`, bar.x - 5, bar.y);
+        c.fillText(`n=${n}`, rightEdge, bar.y);
       });
       c.restore();
     }
@@ -1081,12 +1082,12 @@ function renderBarChart(data) {
   });
 
   // chart note
-  const medLabel = yearMedian ? `~${fmtK(yearMedian)} national median for bachelor's at this period` : 'est. national median for bachelor\'s degrees';
+  const cohort = availYears.find(e => e.key === selYear)?.cohort || '';
+  const medLabel = yearMedian ? `~${fmtK(yearMedian)} national median for bachelor's` : 'est. national median for bachelor\'s degrees';
   document.getElementById('chartNote').textContent =
-    `* Dashed line marks ${medLabel} (College Scorecard). ` +
-    'Earnings cover students who received federal financial aid. ' +
-    'Students enrolled in another degree program at the time of measurement are excluded, ' +
-    'so early-period figures may skew slightly higher.';
+    `* Dashed line: ${medLabel} (College Scorecard). ` +
+    (cohort ? `Data: ${cohort}. ` : '') +
+    'Students enrolled in another degree program at the time of measurement are excluded.';
 }
 
 function renderLineChart(programs, credLevel) {
