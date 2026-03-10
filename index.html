@@ -520,16 +520,24 @@ async function fetchPrograms(schoolId) {
   const cached = cache.get(cacheKey);
   if (cached) return cached;
 
-  // Earnings relative paths (within each program object)
+  // Known earnings subfields (relative path within each program object)
   const EARN_DEFS = [
     { key: 'earn_3yr', field: 'earnings.highest.3_yr.overall_median_earnings', label: '3 Years After' },
     { key: 'earn_4yr', field: 'earnings.4_yr.overall_median_earnings',         label: '4 Years After' },
     { key: 'earn_5yr', field: 'earnings.5_yr.overall_median_earnings',         label: '5 Years After' },
   ];
 
+  // Request specific subfields so the API actually includes earnings data
+  const subfields = [
+    'code', 'title', 'credential.level',
+    'earnings.highest.3_yr.overall_median_earnings',
+    'earnings.4_yr.overall_median_earnings',
+    'earnings.5_yr.overall_median_earnings',
+  ].map(f => 'latest.programs.cip_4_digit.' + f).join(',');
+
   const d = await apiFetch(`${API_BASE}/schools/?${new URLSearchParams({
     'id': schoolId,
-    'fields': 'id,latest.programs.cip_4_digit',
+    'fields': 'id,' + subfields,
     'all_programs_nested': 'true',
     'per_page': 1,
     'api_key': getApiKey(),
@@ -537,9 +545,23 @@ async function fetchPrograms(schoolId) {
 
   const school = d.results?.[0] || {};
   const rawProgs = school['latest.programs.cip_4_digit'] || [];
-  console.log('[Scorecard] programs count:', rawProgs.length, '| sample:', rawProgs[0]);
+  console.log('[Scorecard] programs count:', rawProgs.length, '| sample keys:', Object.keys(rawProgs[0] || {}));
 
   if (!rawProgs.length) return { programs: [], years: [] };
+
+  // Dynamic discovery: find any earnings/median keys in case field names differ
+  const sampleKeys = Object.keys(rawProgs[0]);
+  const dynEarnDefs = EARN_DEFS.filter(e => sampleKeys.includes(e.field));
+  // Also pick up any undocumented earnings fields
+  const extraEarnFields = sampleKeys.filter(k =>
+    /earn/i.test(k) && /median/i.test(k) && !EARN_DEFS.some(e => e.field === k)
+  );
+  const allEarnDefs = [
+    ...dynEarnDefs,
+    ...extraEarnFields.map((f, i) => ({ key: 'earn_x' + i, field: f, label: f })),
+  ];
+  // If no known earn fields found, fall back to all earn-like keys
+  const effectiveDefs = allEarnDefs.length ? allEarnDefs : EARN_DEFS;
 
   const programs = rawProgs.map(p => {
     const prog = {
@@ -547,12 +569,13 @@ async function fetchPrograms(schoolId) {
       'title':            p['title'] || '',
       'credential.level': p['credential.level'] ?? null,
     };
-    EARN_DEFS.forEach(e => { prog[e.key] = p[e.field] ?? null; });
+    effectiveDefs.forEach(e => { prog[e.key] = p[e.field] ?? null; });
     return prog;
   });
 
-  const years = EARN_DEFS.filter(e => programs.some(p => p[e.key] != null))
-                         .map(e => ({ key: e.key, label: e.label }));
+  const years = effectiveDefs
+    .filter(e => programs.some(p => p[e.key] != null))
+    .map(e => ({ key: e.key, label: e.label }));
 
   const result = { programs, years };
   cache.set(cacheKey, result, 3_600_000);
