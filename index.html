@@ -458,6 +458,45 @@ let currentSchool  = null;
 const fmt = v => v != null ? new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(v) : '—';
 const fmtK = v => v != null ? '$'+(v/1000).toFixed(0)+'k' : '';
 
+// Normalize verbose CIP/school titles to colloquial display names
+function cleanTitle(title) {
+  if (!title) return 'Unknown';
+  let t = title.replace(/\.\s*$/, '').trim();           // strip trailing period
+  const MAP = {
+    'Business/Managerial Economics':                          'Economics',
+    'Computer and Information Sciences, General':            'Computer Science',
+    'Computer and Information Science':                      'Computer Science',
+    'Nursing/Registered Nurse (RN, ASN, BSN, MSN)':         'Nursing',
+    'Business Administration and Management, General':       'Business Administration',
+    'Business Administration and Management':                'Business Administration',
+    'Kinesiology and Exercise Science':                      'Exercise Science',
+    'Health and Physical Education/Fitness, General':        'Physical Education',
+    'Communication, General':                                'Communication',
+    'English Language and Literature, General':              'English',
+    'Psychology, General':                                   'Psychology',
+    'Biology/Biological Sciences, General':                  'Biology',
+    'Mathematics, General':                                  'Mathematics',
+    'Political Science and Government, General':             'Political Science',
+    'History, General':                                      'History',
+    'Sociology':                                             'Sociology',
+    'Criminal Justice/Safety Studies':                       'Criminal Justice',
+    'Music Therapy/Therapist':                               'Music Therapy',
+    'Art/Art Studies, General':                              'Art',
+    'Drama and Dramatics/Theatre Arts, General':             'Theatre Arts',
+    'Journalism':                                            'Journalism',
+    'Marketing/Marketing Management, General':               'Marketing',
+    'Accounting':                                            'Accounting',
+    'Public Health, General':                                'Public Health',
+    'Special Education and Teaching, General':               'Special Education',
+    'Management Information Systems, General':               'Management Info Systems',
+    'Finance, General':                                      'Finance',
+    'Early Childhood Education and Teaching':                'Early Childhood Education',
+  };
+  if (MAP[t]) return MAP[t];
+  t = t.replace(/,\s*General$/, '');                    // strip ", General"
+  return t;
+}
+
 function cip2prefix(code) {
   if (!code) return null;
   // Strip decimal point ("11.07" → "1107"), then parse
@@ -543,8 +582,11 @@ async function fetchPrograms(schoolId) {
   const subfields = [
     'code', 'title', 'credential.level',
     'earnings.highest.3_yr.overall_median_earnings',
+    'earnings.highest.3_yr.num_students',
     'earnings.4_yr.overall_median_earnings',
+    'earnings.4_yr.num_students',
     'earnings.5_yr.overall_median_earnings',
+    'earnings.5_yr.num_students',
   ].map(f => 'latest.programs.cip_4_digit.' + f).join(',');
 
   const d = await apiFetch(`${API_BASE}/schools/?${new URLSearchParams({
@@ -570,13 +612,25 @@ async function fetchPrograms(schoolId) {
     return null;
   };
 
+  const getN = (p, def) => {
+    const e = p?.earnings;
+    if (!e) return null;
+    if (def.key === 'earn_3yr') return e?.highest?.['3_yr']?.num_students ?? null;
+    if (def.key === 'earn_4yr') return e?.['4_yr']?.num_students ?? null;
+    if (def.key === 'earn_5yr') return e?.['5_yr']?.num_students ?? null;
+    return null;
+  };
+
   const programs = rawProgs.map(p => {
     const prog = {
       'code':             p['code'] ?? null,
       'title':            p['title'] || '',
       'credential.level': p?.credential?.level ?? null,
     };
-    EARN_DEFS.forEach(e => { prog[e.key] = getEarn(p, e); });
+    EARN_DEFS.forEach(e => {
+      prog[e.key]          = getEarn(p, e);
+      prog[e.key + '_n']   = getN(p, e);
+    });
     return prog;
   });
 
@@ -615,14 +669,15 @@ function getChartData(programs, credLevel, earnKey) {
   );
   if (!rows.length) return [];
 
-  // Show each individual program (deduplicate by title, keep max earnings)
+  // Show each individual program (deduplicate by cleaned title, keep max earnings)
   const map = {};
   for (const p of rows) {
-    const key  = (p.title || p.code || '').toLowerCase().trim();
-    const name = p.title || `CIP ${p.code}`;
+    const name = cleanTitle(p.title) || `CIP ${p.code}`;
+    const key  = name.toLowerCase().trim();
     const earn = p[earnKey];
+    const n    = p[earnKey + '_n'] ?? null;
     if (!map[key] || map[key].earn < earn) {
-      map[key] = { name, earn, raw: p };
+      map[key] = { name, earn, n, raw: p };
     }
   }
   // Sort descending
@@ -645,6 +700,26 @@ function renderBarChart(data) {
   if (mainChart) mainChart.destroy();
 
   const US_MEDIAN = 59000; // approximate US individual median earnings
+
+  // Inline plugin: draw n=XX right-justified inside each bar, subtle
+  const nLabelPlugin = {
+    id: 'nLabels',
+    afterDraw(chart) {
+      const meta = chart.getDatasetMeta(0);
+      const c = chart.ctx;
+      c.save();
+      c.font = '9px Inter, sans-serif';
+      c.textBaseline = 'middle';
+      c.textAlign = 'right';
+      meta.data.forEach((bar, i) => {
+        const n = data[i]?.n;
+        if (!n) return;
+        c.fillStyle = 'rgba(255,255,255,0.22)';
+        c.fillText(`n=${n}`, bar.x - 5, bar.y);
+      });
+      c.restore();
+    }
+  };
 
   mainChart = new Chart(ctx, {
     type: 'bar',
@@ -727,13 +802,14 @@ function renderBarChart(data) {
           }
         }
       }
-    }
+    },
+    plugins: [nLabelPlugin],
   });
 
   // chart note
   document.getElementById('chartNote').textContent =
     '* Dashed line marks approximate U.S. individual median earnings (~$59k). ' +
-    'Earnings for students who received federal financial aid; values suppressed when n < 30.';
+    'Earnings for students who received federal financial aid. n = number of students in sample.';
 }
 
 function renderLineChart(programs, credLevel) {
@@ -758,10 +834,7 @@ function renderLineChart(programs, credLevel) {
   const labels  = yearsWithData.map(e => e.label);
 
   const datasets = top.map((maj, i) => {
-    const row = programs.find(p =>
-      p['credential.level'] === credLevel &&
-      cipName(p.code, p.title) === maj.name
-    ) || {};
+    const row = maj.raw || {};
     return {
       label: maj.name,
       data: yearsWithData.map(e => row[e.key] ?? null),
