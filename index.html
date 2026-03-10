@@ -545,35 +545,30 @@ async function fetchPrograms(schoolId) {
 
   const school = d.results?.[0] || {};
   const rawProgs = school['latest.programs.cip_4_digit'] || [];
-  console.log('[Scorecard] programs count:', rawProgs.length, '| sample keys:', Object.keys(rawProgs[0] || {}));
 
   if (!rawProgs.length) return { programs: [], years: [] };
 
-  // Dynamic discovery: find any earnings/median keys in case field names differ
-  const sampleKeys = Object.keys(rawProgs[0]);
-  const dynEarnDefs = EARN_DEFS.filter(e => sampleKeys.includes(e.field));
-  // Also pick up any undocumented earnings fields
-  const extraEarnFields = sampleKeys.filter(k =>
-    /earn/i.test(k) && /median/i.test(k) && !EARN_DEFS.some(e => e.field === k)
-  );
-  const allEarnDefs = [
-    ...dynEarnDefs,
-    ...extraEarnFields.map((f, i) => ({ key: 'earn_x' + i, field: f, label: f })),
-  ];
-  // If no known earn fields found, fall back to all earn-like keys
-  const effectiveDefs = allEarnDefs.length ? allEarnDefs : EARN_DEFS;
+  // API returns nested objects: p.credential.level, p.earnings['4_yr'].overall_median_earnings
+  const getEarn = (p, def) => {
+    const e = p?.earnings;
+    if (!e) return null;
+    if (def.key === 'earn_3yr') return e?.highest?.['3_yr']?.overall_median_earnings ?? null;
+    if (def.key === 'earn_4yr') return e?.['4_yr']?.overall_median_earnings ?? null;
+    if (def.key === 'earn_5yr') return e?.['5_yr']?.overall_median_earnings ?? null;
+    return null;
+  };
 
   const programs = rawProgs.map(p => {
     const prog = {
       'code':             p['code'] ?? null,
       'title':            p['title'] || '',
-      'credential.level': p['credential.level'] ?? null,
+      'credential.level': p?.credential?.level ?? null,
     };
-    effectiveDefs.forEach(e => { prog[e.key] = p[e.field] ?? null; });
+    EARN_DEFS.forEach(e => { prog[e.key] = getEarn(p, e); });
     return prog;
   });
 
-  const years = effectiveDefs
+  const years = EARN_DEFS
     .filter(e => programs.some(p => p[e.key] != null))
     .map(e => ({ key: e.key, label: e.label }));
 
