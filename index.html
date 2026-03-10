@@ -461,39 +461,105 @@ const fmtK = v => v != null ? '$'+(v/1000).toFixed(0)+'k' : '';
 // Normalize verbose CIP/school titles to colloquial display names
 function cleanTitle(title) {
   if (!title) return 'Unknown';
-  let t = title.replace(/\.\s*$/, '').trim();           // strip trailing period
+  let t = title.replace(/\.\s*$/, '').trim();  // strip trailing period
+  // Remove parenthetical credential qualifiers e.g. "(RN, ASN, BSN, MSN)"
+  t = t.replace(/\s*\([A-Z,\s\/]+\)\s*$/, '').trim();
   const MAP = {
-    'Business/Managerial Economics':                          'Economics',
-    'Computer and Information Sciences, General':            'Computer Science',
-    'Computer and Information Science':                      'Computer Science',
-    'Nursing/Registered Nurse (RN, ASN, BSN, MSN)':         'Nursing',
-    'Business Administration and Management, General':       'Business Administration',
-    'Business Administration and Management':                'Business Administration',
-    'Kinesiology and Exercise Science':                      'Exercise Science',
-    'Health and Physical Education/Fitness, General':        'Physical Education',
-    'Communication, General':                                'Communication',
-    'English Language and Literature, General':              'English',
-    'Psychology, General':                                   'Psychology',
-    'Biology/Biological Sciences, General':                  'Biology',
-    'Mathematics, General':                                  'Mathematics',
-    'Political Science and Government, General':             'Political Science',
-    'History, General':                                      'History',
-    'Sociology':                                             'Sociology',
-    'Criminal Justice/Safety Studies':                       'Criminal Justice',
-    'Music Therapy/Therapist':                               'Music Therapy',
-    'Art/Art Studies, General':                              'Art',
-    'Drama and Dramatics/Theatre Arts, General':             'Theatre Arts',
-    'Journalism':                                            'Journalism',
-    'Marketing/Marketing Management, General':               'Marketing',
-    'Accounting':                                            'Accounting',
-    'Public Health, General':                                'Public Health',
-    'Special Education and Teaching, General':               'Special Education',
-    'Management Information Systems, General':               'Management Info Systems',
-    'Finance, General':                                      'Finance',
-    'Early Childhood Education and Teaching':                'Early Childhood Education',
+    // Business
+    'Business/Managerial Economics':                                                    'Economics',
+    'Business Administration, Management and Operations':                               'Business Administration',
+    'Business/Commerce, General':                                                       'Business',
+    'Business/Corporate Communications':                                                'Business Communication',
+    'Accounting and Related Services':                                                  'Accounting',
+    'Finance and Financial Management Services':                                        'Finance',
+    'Management Information Systems and Services':                                      'Management Info Systems',
+    'Management Sciences and Quantitative Methods':                                     'Management Science',
+    'Human Resources Management and Services':                                          'Human Resources',
+    'Entrepreneurial and Small Business Operations':                                    'Entrepreneurship',
+    'International Business':                                                           'International Business',
+    'Hospitality Administration/Management':                                            'Hospitality Management',
+    'Real Estate Development':                                                          'Real Estate Development',
+    // Health
+    'Registered Nursing, Nursing Administration, Nursing Research and Clinical Nursing':'Nursing',
+    'Allied Health Diagnostic, Intervention, and Treatment Professions':                'Allied Health',
+    'Allied Health and Medical Assisting Services':                                     'Medical Assisting',
+    'Clinical/Medical Laboratory Science/Research and Allied Professions':              'Medical Lab Science',
+    'Dietetics and Clinical Nutrition Services':                                        'Dietetics & Nutrition',
+    'Foods, Nutrition, and Related Services':                                           'Food & Nutrition',
+    'Health Services/Allied Health/Health Sciences, General':                           'Health Sciences',
+    'Health and Medical Administrative Services':                                       'Health Administration',
+    'Mental and Social Health Services and Allied Professions':                         'Mental Health Services',
+    'Pharmacy, Pharmaceutical Sciences, and Administration':                            'Pharmacy',
+    'Rehabilitation and Therapeutic Professions':                                       'Rehabilitation Sciences',
+    'Communication Disorders Sciences and Services':                                    'Communication Disorders',
+    // Sciences
+    'Biology, General':                                                                 'Biology',
+    'Biochemistry, Biophysics and Molecular Biology':                                   'Biochemistry',
+    'Biomathematics, Bioinformatics, and Computational Biology':                        'Bioinformatics',
+    'Biomedical/Medical Engineering':                                                   'Biomedical Engineering',
+    'Cell/Cellular Biology and Anatomical Sciences':                                    'Cell Biology',
+    'Microbiological Sciences and Immunology':                                          'Microbiology',
+    'Neurobiology and Neurosciences':                                                   'Neuroscience',
+    'Geological and Earth Sciences/Geosciences':                                        'Earth Sciences',
+    'Physiology, Pathology and Related Sciences':                                       'Physiology & Pathology',
+    'Physical Sciences, General':                                                       'Physical Sciences',
+    'Zoology/Animal Biology':                                                           'Zoology',
+    // Engineering
+    'Aerospace, Aeronautical, and Astronautical/Space Engineering':                     'Aerospace Engineering',
+    'Electrical and Computer Engineering':                                              'Electrical & Computer Engineering',
+    'Electrical, Electronics, and Communications Engineering':                          'Electrical Engineering',
+    'Computer and Information Sciences, General':                                       'Computer & Info Sciences',
+    // Education
+    'Education, General':                                                               'Education',
+    'Teacher Education and Professional Development, Specific Levels and Methods':      'Teacher Education',
+    'Teacher Education and Professional Development, Specific Subject Areas':           'Subject-Area Teaching',
+    'Special Education and Teaching':                                                   'Special Education',
+    // Social Sciences / Humanities
+    'English Language and Literature, General':                                         'English',
+    'Political Science and Government':                                                 'Political Science',
+    'Criminal Justice and Corrections':                                                 'Criminal Justice',
+    'Communication and Media Studies':                                                  'Communication & Media',
+    'Public Relations, Advertising, and Applied Communication':                         'Public Relations & Advertising',
+    'Radio, Television, and Digital Communication':                                     'Radio, TV & Digital Media',
+    'Film/Video and Photographic Arts':                                                 'Film & Photography',
+    'Germanic Languages, Literatures, and Linguistics':                                 'German Studies',
+    'Romance Languages, Literatures, and Linguistics':                                  'Romance Languages',
+    'Liberal Arts and Sciences, General Studies and Humanities':                        'Liberal Arts',
+    'Ethnic, Cultural Minority, Gender, and Group Studies':                             'Cultural & Gender Studies',
+    'International Relations and National Security Studies':                            'International Relations',
+    'Multi-/Interdisciplinary Studies, General':                                        'Interdisciplinary Studies',
+    'Science, Technology and Society':                                                  'Science & Society',
+    'Philosophy and Religious Studies, General':                                        'Philosophy & Religion',
+    'Philosophy, Politics, and Economics':                                              'Philosophy, Politics & Econ',
+    'Theological and Ministerial Studies':                                              'Theology & Ministry',
+    // Kinesiology / Recreation
+    'Sports, Kinesiology, and Physical Education/Fitness':                              'Exercise Science',
+    'Parks, Recreation, Leisure, Fitness, and Kinesiology, Other':                      'Kinesiology & Recreation',
+    'Parks, Recreation, and Leisure Facilities Management':                             'Recreation Management',
+    'Parks, Recreation, and Leisure Studies':                                           'Recreation Studies',
+    'Human Development, Family Studies, and Related Services':                          'Human Development',
+    'Family and Consumer Sciences/Human Sciences, General':                             'Family & Consumer Sciences',
+    // Arts & Design
+    'Drama/Theatre Arts and Stagecraft':                                                'Theatre Arts',
+    'Fine and Studio Arts':                                                             'Studio Art',
+    'Visual and Performing Arts, General':                                              'Visual & Performing Arts',
+    'Design and Applied Arts':                                                          'Design',
+    // Environment / Natural Resources
+    'Environmental/Natural Resources Management and Policy':                            'Environmental Management',
+    'Natural Resources Conservation and Research':                                      'Natural Resources',
+    'Wildlife and Wildlands Science and Management':                                    'Wildlife Science',
+    // Agriculture
+    'Agricultural Business and Management':                                             'Ag Business',
+    // Other
+    'City/Urban, Community, and Regional Planning':                                     'Urban Planning',
+    'Clinical, Counseling and Applied Psychology':                                      'Clinical Psychology',
+    'Psychology, General':                                                              'Psychology',
+    'Social Sciences, General':                                                         'Social Sciences',
+    'Public Administration and Social Service Professions, Other':                      'Public & Social Services',
   };
   if (MAP[t]) return MAP[t];
-  t = t.replace(/,\s*General$/, '');                    // strip ", General"
+  t = t.replace(/,\s*General$/, '');   // strip ", General" fallback
+  t = t.replace(/,\s*Other$/, '');     // strip ", Other" fallback
   return t;
 }
 
@@ -582,14 +648,8 @@ async function fetchPrograms(schoolId) {
   const subfields = [
     'code', 'title', 'credential.level',
     'earnings.highest.3_yr.overall_median_earnings',
-    'earnings.highest.3_yr.num_students',
-    'earnings.highest.3_yr.not_working_not_enrolled.num_students',
     'earnings.4_yr.overall_median_earnings',
-    'earnings.4_yr.num_students',
-    'earnings.4_yr.not_working_not_enrolled.num_students',
     'earnings.5_yr.overall_median_earnings',
-    'earnings.5_yr.num_students',
-    'earnings.5_yr.not_working_not_enrolled.num_students',
   ].map(f => 'latest.programs.cip_4_digit.' + f).join(',');
 
   const d = await apiFetch(`${API_BASE}/schools/?${new URLSearchParams({
@@ -602,8 +662,6 @@ async function fetchPrograms(schoolId) {
 
   const school = d.results?.[0] || {};
   const rawProgs = school['latest.programs.cip_4_digit'] || [];
-  // DEBUG: log raw structure of first program to find correct n field path
-  if (rawProgs.length) console.log('[Scorecard] raw program[0]:', JSON.stringify(rawProgs[0], null, 2));
 
   if (!rawProgs.length) return { programs: [], years: [] };
 
@@ -617,25 +675,13 @@ async function fetchPrograms(schoolId) {
     return null;
   };
 
-  const getN = (p, def) => {
-    const e = p?.earnings;
-    if (!e) return null;
-    if (def.key === 'earn_3yr') return e?.highest?.['3_yr']?.num_students ?? null;
-    if (def.key === 'earn_4yr') return e?.['4_yr']?.num_students ?? null;
-    if (def.key === 'earn_5yr') return e?.['5_yr']?.num_students ?? null;
-    return null;
-  };
-
   const programs = rawProgs.map(p => {
     const prog = {
       'code':             p['code'] ?? null,
       'title':            p['title'] || '',
       'credential.level': p?.credential?.level ?? null,
     };
-    EARN_DEFS.forEach(e => {
-      prog[e.key]          = getEarn(p, e);
-      prog[e.key + '_n']   = getN(p, e);
-    });
+    EARN_DEFS.forEach(e => { prog[e.key] = getEarn(p, e); });
     return prog;
   });
 
@@ -680,9 +726,8 @@ function getChartData(programs, credLevel, earnKey) {
     const name = cleanTitle(p.title) || `CIP ${p.code}`;
     const key  = name.toLowerCase().trim();
     const earn = p[earnKey];
-    const n    = p[earnKey + '_n'] ?? null;
     if (!map[key] || map[key].earn < earn) {
-      map[key] = { name, earn, n, raw: p };
+      map[key] = { name, earn, raw: p };
     }
   }
   // Sort descending
@@ -705,26 +750,6 @@ function renderBarChart(data) {
   if (mainChart) mainChart.destroy();
 
   const US_MEDIAN = 59000; // approximate US individual median earnings
-
-  // Inline plugin: draw n=XX right-justified inside each bar, subtle
-  const nLabelPlugin = {
-    id: 'nLabels',
-    afterDraw(chart) {
-      const meta = chart.getDatasetMeta(0);
-      const c = chart.ctx;
-      c.save();
-      c.font = '9px Inter, sans-serif';
-      c.textBaseline = 'middle';
-      c.textAlign = 'right';
-      meta.data.forEach((bar, i) => {
-        const n = data[i]?.n;
-        if (!n) return;
-        c.fillStyle = 'rgba(255,255,255,0.22)';
-        c.fillText(`n=${n}`, bar.x - 5, bar.y);
-      });
-      c.restore();
-    }
-  };
 
   mainChart = new Chart(ctx, {
     type: 'bar',
@@ -808,13 +833,12 @@ function renderBarChart(data) {
         }
       }
     },
-    plugins: [nLabelPlugin],
   });
 
   // chart note
   document.getElementById('chartNote').textContent =
     '* Dashed line marks approximate US individual median earnings (~$59k). ' +
-    'Earnings for students who received federal financial aid. n = number of students in sample.';
+    'Earnings reported for students who received federal financial aid.';
 }
 
 function renderLineChart(programs, credLevel) {
