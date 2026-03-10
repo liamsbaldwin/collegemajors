@@ -615,14 +615,14 @@ function getChartData(programs, credLevel, earnKey) {
   );
   if (!rows.length) return [];
 
-  // Group by 2-digit CIP, take max earnings within group
+  // Show each individual program (deduplicate by title, keep max earnings)
   const map = {};
   for (const p of rows) {
-    const prefix = cip2prefix(p.code) ?? ('_' + (p.title || p.code));
-    const name   = cipName(p.code, p.title);
-    const earn   = p[earnKey];
-    if (!map[prefix] || map[prefix].earn < earn) {
-      map[prefix] = { name, earn, raw: p };
+    const key  = (p.title || p.code || '').toLowerCase().trim();
+    const name = p.title || `CIP ${p.code}`;
+    const earn = p[earnKey];
+    if (!map[key] || map[key].earn < earn) {
+      map[key] = { name, earn, raw: p };
     }
   }
   // Sort descending
