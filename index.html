@@ -520,44 +520,72 @@ async function fetchPrograms(schoolId) {
   const cached = cache.get(cacheKey);
   if (cached) return cached;
 
-  // Program-level (field-of-study) data is nested inside the /schools endpoint.
-  // Request all nested programs with all_programs_nested=true.
-  const PROG_KEY = 'latest.programs.cip_4digit';
-  const fields = [
-    'id',
-    `${PROG_KEY}.code`,
-    `${PROG_KEY}.title`,
-    `${PROG_KEY}.credential.level`,
-    `${PROG_KEY}.earn_mdn_1yr`,
-    `${PROG_KEY}.earn_mdn_5yr`,
-  ].join(',');
-
+  // Use wildcard field request + keys_nested so we get true JSON and
+  // can discover whatever field names the API actually returns.
+  // Try both cip_4digit and cip_4 key variants.
   const d = await apiFetch(`${API_BASE}/schools/?${new URLSearchParams({
     'id': schoolId,
-    'fields': fields,
+    'fields': 'id,latest.programs',
     'all_programs_nested': 'true',
+    'keys_nested': 'true',
     'per_page': 1,
     'api_key': getApiKey(),
   })}`);
 
-  const rawProgs = d.results?.[0]?.[PROG_KEY] || [];
-  console.log('[Scorecard] raw programs sample:', rawProgs.slice(0, 2));
+  const school = d.results?.[0];
+  if (!school) return { programs: [], years: [] };
+
+  // Programs may be nested as true JSON (keys_nested) or dotted keys
+  const progContainer =
+    school?.latest?.programs ||
+    school?.['latest.programs'] || {};
+
+  // The programs array could be under cip_4digit, cip_4, or similar
+  const rawProgs =
+    progContainer?.cip_4digit ||
+    progContainer?.cip_4 ||
+    school?.['latest.programs.cip_4digit'] ||
+    school?.['latest.programs.cip_4'] ||
+    [];
+
+  console.log('[Scorecard] progContainer keys:', Object.keys(progContainer));
+  console.log('[Scorecard] rawProgs sample:', rawProgs.slice(0, 2));
 
   if (!rawProgs.length) return { programs: [], years: [] };
 
-  // Normalize to the flat format the rest of the code expects
-  const programs = rawProgs.map(p => ({
-    'code':              p.code,
-    'title':             p.title,
-    'credential.level':  p['credential.level'],
-    'earn_mdn_1yr':      p.earn_mdn_1yr ?? null,
-    'earn_mdn_5yr':      p.earn_mdn_5yr ?? null,
-  }));
+  const sample = rawProgs[0];
+  const allKeys = Object.keys(sample);
+  console.log('[Scorecard] program keys:', allKeys);
 
-  const years = [
-    { key: 'earn_mdn_1yr', label: '1 Year After' },
-    { key: 'earn_mdn_5yr', label: '5 Years After' },
-  ].filter(y => programs.some(p => p[y.key] != null));
+  // Dynamically find earnings keys (median, exclude count/pct/share)
+  const earnKeys = allKeys.filter(k =>
+    /earn/i.test(k) && /mdn|median/i.test(k) &&
+    !/count|pct|share|thresh/i.test(k)
+  );
+  console.log('[Scorecard] earn keys found:', earnKeys);
+
+  // Helper: try multiple key variants
+  const pick = (obj, ...keys) => {
+    for (const k of keys) if (obj[k] != null) return obj[k];
+    return null;
+  };
+
+  const programs = rawProgs.map(p => {
+    const base = {
+      'code':             pick(p, 'code', 'cipcode', 'cip_code', 'cip4'),
+      'title':            pick(p, 'title', 'cipdesc', 'cip_desc', 'name') || '',
+      'credential.level': pick(p, 'credential.level', 'credlev', 'credential_level', 'cred_lev'),
+    };
+    earnKeys.forEach(k => { base[k] = p[k] ?? null; });
+    return base;
+  });
+
+  // Build year tabs from discovered earn keys
+  const YEAR_LABEL = { '1': '1 Year After', '2': '2 Years After', '3': '3 Years After', '4': '4 Years After', '5': '5 Years After' };
+  const years = earnKeys.map((key) => {
+    const m = key.match(/(\d)/);
+    return { key, label: (m && YEAR_LABEL[m[1]]) || key };
+  }).filter(y => programs.some(p => p[y.key] != null));
 
   const result = { programs, years };
   cache.set(cacheKey, result, 3_600_000);
