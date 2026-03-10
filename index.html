@@ -161,32 +161,39 @@
     /* Stats row */
     .stats-row {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-      gap: 14px;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
       margin-bottom: 22px;
     }
     .stat-card {
       background: var(--bg3);
       border: 1px solid var(--border);
       border-radius: 12px;
-      padding: 18px 20px;
+      padding: 16px 14px;
     }
     .stat-label {
-      font-size: 10.5px;
+      font-size: 10px;
       font-weight: 600;
       text-transform: uppercase;
-      letter-spacing: .07em;
+      letter-spacing: .06em;
       color: var(--tx3);
       margin-bottom: 6px;
     }
     .stat-val {
-      font-size: 22px;
+      font-size: 20px;
       font-weight: 700;
       color: var(--accent);
       letter-spacing: -0.02em;
     }
-    .stat-val.sm { font-size: 15px; }
-    .stat-note { font-size: 11px; color: var(--tx3); margin-top: 3px; }
+    .stat-val.sm { font-size: 14px; }
+    .stat-note { font-size: 10.5px; color: var(--tx3); margin-top: 3px; }
+    @media (max-width: 600px) {
+      .stat-card { padding: 11px 9px; }
+      .stat-val { font-size: 15px; }
+      .stat-val.sm { font-size: 12px; }
+      .stat-label { font-size: 8.5px; letter-spacing: .04em; }
+      .stat-note { font-size: 9.5px; }
+    }
 
     /* Chart card */
     .chart-card {
@@ -213,10 +220,11 @@
       letter-spacing: .08em;
       color: var(--tx3);
     }
-    .tab-row { display: flex; flex-wrap: wrap; gap: 5px; }
+    .tab-row { display: flex; flex-wrap: nowrap; gap: 5px; overflow-x: auto; }
+    .tab-row::-webkit-scrollbar { display: none; }
     .tab {
-      padding: 5px 13px;
-      font-size: 12.5px;
+      padding: 5px 11px;
+      font-size: 12px;
       font-family: inherit;
       font-weight: 500;
       border-radius: 7px;
@@ -225,6 +233,8 @@
       color: var(--tx2);
       cursor: pointer;
       transition: all .14s;
+      white-space: nowrap;
+      flex-shrink: 0;
     }
     .tab:hover { background: var(--bg4); color: var(--tx1); }
     .tab.active {
@@ -460,6 +470,7 @@ let selYear        = null;
 let mainChart      = null;
 let lineChart2     = null;
 let currentSchool  = null;
+let nationalMedians = null; // { earn_3yr, earn_4yr, earn_5yr } — fetched once per session
 
 /* ─────────────────────────────────────────────
    UTILS
@@ -776,9 +787,9 @@ async function fetchPrograms(schoolId) {
 
   // Known earnings subfields (relative path within each program object)
   const EARN_DEFS = [
-    { key: 'earn_3yr', field: 'earnings.highest.3_yr.overall_median_earnings', label: '3 Years After' },
-    { key: 'earn_4yr', field: 'earnings.4_yr.overall_median_earnings',         label: '4 Years After' },
-    { key: 'earn_5yr', field: 'earnings.5_yr.overall_median_earnings',         label: '5 Years After' },
+    { key: 'earn_3yr', field: 'earnings.highest.3_yr.overall_median_earnings', label: '3-Year' },
+    { key: 'earn_4yr', field: 'earnings.4_yr.overall_median_earnings',         label: '4-Year' },
+    { key: 'earn_5yr', field: 'earnings.5_yr.overall_median_earnings',         label: '5-Year' },
   ];
 
   // Request specific subfields so the API actually includes earnings data
@@ -846,6 +857,65 @@ async function fetchPrograms(schoolId) {
   return result;
 }
 
+async function loadNationalMedians(credLevel = 3) {
+  if (nationalMedians) return;
+  const cacheKey = `natmed_${credLevel}`;
+  const cached = cache.get(cacheKey);
+  if (cached) { nationalMedians = cached; return; }
+
+  try {
+    const subfields = [
+      'earnings.highest.3_yr.overall_median_earnings',
+      'earnings.4_yr.overall_median_earnings',
+      'earnings.5_yr.overall_median_earnings',
+      'credential.level',
+    ].map(f => 'latest.programs.cip_4_digit.' + f).join(',');
+
+    const d = await apiFetch(`${API_BASE}/schools/?${new URLSearchParams({
+      'fields': 'id,' + subfields,
+      'all_programs_nested': 'true',
+      'per_page': 100,
+      'api_key': getApiKey(),
+    })}`);
+
+    const buckets = { earn_3yr: [], earn_4yr: [], earn_5yr: [] };
+    for (const school of (d.results || [])) {
+      for (const p of (school['latest.programs.cip_4_digit'] || [])) {
+        if (p?.credential?.level !== credLevel) continue;
+        const e = p?.earnings;
+        if (e?.highest?.['3_yr']?.overall_median_earnings != null)
+          buckets.earn_3yr.push(e.highest['3_yr'].overall_median_earnings);
+        if (e?.['4_yr']?.overall_median_earnings != null)
+          buckets.earn_4yr.push(e['4_yr'].overall_median_earnings);
+        if (e?.['5_yr']?.overall_median_earnings != null)
+          buckets.earn_5yr.push(e['5_yr'].overall_median_earnings);
+      }
+    }
+
+    const computeMedian = arr => {
+      if (!arr.length) return null;
+      const s = [...arr].sort((a, b) => a - b);
+      const m = Math.floor(s.length / 2);
+      return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+    };
+
+    const m3 = computeMedian(buckets.earn_3yr);
+    const m4 = computeMedian(buckets.earn_4yr);
+    const m5 = computeMedian(buckets.earn_5yr);
+
+    if (m3 || m4 || m5) {
+      nationalMedians = { earn_3yr: m3, earn_4yr: m4, earn_5yr: m5 };
+      cache.set(cacheKey, nationalMedians, 86_400_000);
+      return;
+    }
+  } catch (e) {
+    console.warn('[Scorecard] national medians fetch failed:', e);
+  }
+
+  // Fallback: approximate values from published College Scorecard data (bachelor's, ~2020-2022 cohort)
+  nationalMedians = { earn_3yr: 41000, earn_4yr: 46000, earn_5yr: 52000 };
+}
+
 /* ─────────────────────────────────────────────
    DATA PROCESSING
 ───────────────────────────────────────────── */
@@ -902,7 +972,9 @@ function renderBarChart(data) {
   const ctx = document.getElementById('barChart').getContext('2d');
   if (mainChart) mainChart.destroy();
 
-  const US_MEDIAN = 59000; // approximate US individual median earnings
+  // Year-specific national median for bachelor's degree recipients (from College Scorecard national sample)
+  const yearMedian = nationalMedians?.[selYear] ?? null;
+  const US_MEDIAN = yearMedian || 52000;
 
   const nLabelPlugin = {
     id: 'nLabels',
@@ -970,7 +1042,7 @@ function renderBarChart(data) {
               borderWidth: 1.5,
               borderDash: [5,4],
               label: {
-                content: 'US Median',
+                content: yearMedian ? 'US Median (bachelor\'s)' : 'US Median (est.)',
                 display: true,
                 position: 'start',
                 yAdjust: -10,
@@ -1009,9 +1081,12 @@ function renderBarChart(data) {
   });
 
   // chart note
+  const medLabel = yearMedian ? `~${fmtK(yearMedian)} national median for bachelor's at this period` : 'est. national median for bachelor\'s degrees';
   document.getElementById('chartNote').textContent =
-    '* Dashed line marks approximate US individual median earnings (~$59k). ' +
-    'Earnings reported for students who received federal financial aid.';
+    `* Dashed line marks ${medLabel} (College Scorecard). ` +
+    'Earnings cover students who received federal financial aid. ' +
+    'Students enrolled in another degree program at the time of measurement are excluded, ' +
+    'so early-period figures may skew slightly higher.';
 }
 
 function renderLineChart(programs, credLevel) {
@@ -1182,7 +1257,7 @@ function updateSubtitle() {
   const yl = availYears.find(e => e.key === selYear)?.label || '';
   const cl = CRED[selCred] || '';
   document.getElementById('plotSub').textContent =
-    `Median earnings ${yl} graduation · ${cl} degrees`;
+    `Median earnings · ${yl} post-graduation · ${cl} degrees`;
 }
 
 function refreshViz() {
@@ -1196,10 +1271,17 @@ function refreshViz() {
 /* ─────────────────────────────────────────────
    SELECT SCHOOL
 ───────────────────────────────────────────── */
-async function selectSchool(school) {
+function updateUrl(schoolId) {
+  const url = new URL(window.location.href);
+  url.searchParams.set('school', schoolId);
+  history.pushState({ schoolId }, '', url);
+}
+
+async function selectSchool(school, skipUrlUpdate = false) {
   closeSuggestions();
   document.getElementById('schoolSearch').value = school['school.name'];
   currentSchool = school;
+  if (!skipUrlUpdate) updateUrl(school.id);
 
   document.getElementById('schoolTitle').textContent = school['school.name'];
   document.getElementById('plotSub').textContent = 'Median earnings by major';
@@ -1216,7 +1298,11 @@ async function selectSchool(school) {
   setTimeout(() => resultsEl.scrollIntoView({ behavior:'smooth', block:'start' }), 80);
 
   try {
-    const fetched = await fetchPrograms(school.id);
+    // Fetch national medians and school programs in parallel
+    const [fetched] = await Promise.all([
+      fetchPrograms(school.id),
+      loadNationalMedians(3),
+    ]);
     allPrograms = fetched.programs;
 
     if (!allPrograms.length) {
@@ -1340,6 +1426,33 @@ document.getElementById('schoolSearch').addEventListener('keydown', e => {
 });
 document.addEventListener('click', e => {
   if (!document.getElementById('searchWrap').contains(e.target)) closeSuggestions();
+});
+
+// ── URL-based school routing ──────────────────────────────────────────────
+// Allows direct links like ?school=139755
+(async () => {
+  const schoolId = new URLSearchParams(window.location.search).get('school');
+  if (!schoolId) return;
+  try {
+    const d = await apiFetch(`${API_BASE}/schools/?${new URLSearchParams({
+      id: schoolId,
+      fields: 'id,school.name,school.city,school.state',
+      api_key: getApiKey(),
+    })}`);
+    const school = d.results?.[0];
+    if (school) selectSchool(school, true); // true = don't re-push URL
+  } catch (e) {
+    console.warn('[Scorecard] Failed to load school from URL param:', e);
+  }
+})();
+
+window.addEventListener('popstate', () => {
+  const schoolId = new URLSearchParams(window.location.search).get('school');
+  if (!schoolId) {
+    document.getElementById('results').classList.remove('visible');
+    document.getElementById('schoolSearch').value = '';
+    currentSchool = null;
+  }
 });
 </script>
 </body>
