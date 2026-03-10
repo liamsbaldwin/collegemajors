@@ -583,10 +583,13 @@ async function fetchPrograms(schoolId) {
     'code', 'title', 'credential.level',
     'earnings.highest.3_yr.overall_median_earnings',
     'earnings.highest.3_yr.num_students',
+    'earnings.highest.3_yr.not_working_not_enrolled.num_students',
     'earnings.4_yr.overall_median_earnings',
     'earnings.4_yr.num_students',
+    'earnings.4_yr.not_working_not_enrolled.num_students',
     'earnings.5_yr.overall_median_earnings',
     'earnings.5_yr.num_students',
+    'earnings.5_yr.not_working_not_enrolled.num_students',
   ].map(f => 'latest.programs.cip_4_digit.' + f).join(',');
 
   const d = await apiFetch(`${API_BASE}/schools/?${new URLSearchParams({
@@ -599,6 +602,8 @@ async function fetchPrograms(schoolId) {
 
   const school = d.results?.[0] || {};
   const rawProgs = school['latest.programs.cip_4_digit'] || [];
+  // DEBUG: log raw structure of first program to find correct n field path
+  if (rawProgs.length) console.log('[Scorecard] raw program[0]:', JSON.stringify(rawProgs[0], null, 2));
 
   if (!rawProgs.length) return { programs: [], years: [] };
 
