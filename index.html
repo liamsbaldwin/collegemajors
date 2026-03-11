@@ -158,11 +158,14 @@
       letter-spacing: -0.015em;
     }
     .school-plot-sub { font-size: 13px; color: var(--tx2); }
+    @media (max-width: 600px) {
+      .school-plot-sub { font-size: 12px; }
+    }
 
     /* Stats row */
     .stats-row {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 10px;
       margin-bottom: 22px;
     }
@@ -171,6 +174,8 @@
       border: 1px solid var(--border);
       border-radius: 12px;
       padding: 16px 14px;
+      min-width: 0;
+      overflow: hidden;
     }
     .stat-label {
       font-size: 10px;
@@ -204,6 +209,7 @@
       border-radius: 16px;
       padding: 24px 24px 20px;
       margin-bottom: 20px;
+      overflow: hidden;
     }
     @media (max-width: 600px) {
       .chart-card { padding: 16px 10px 14px; border-radius: 12px; }
@@ -221,7 +227,7 @@
       margin-bottom: 22px;
       align-items: flex-end;
     }
-    .ctrl-group { display: flex; flex-direction: column; gap: 7px; }
+    .ctrl-group { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
     .ctrl-label {
       font-size: 10px;
       font-weight: 600;
@@ -229,7 +235,7 @@
       letter-spacing: .08em;
       color: var(--tx3);
     }
-    .tab-row { display: flex; flex-wrap: nowrap; gap: 5px; overflow-x: auto; }
+    .tab-row { display: flex; flex-wrap: nowrap; gap: 5px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
     .tab-row::-webkit-scrollbar { display: none; }
     .tab {
       padding: 5px 11px;
