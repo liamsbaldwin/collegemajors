@@ -53,7 +53,9 @@
       letter-spacing: -0.025em;
       color: var(--tx1);
       margin-bottom: 6px;
+      cursor: pointer;
     }
+    h1:hover { color: var(--accent); }
     .hero-sub {
       font-size: 15px;
       color: var(--tx2);
@@ -156,9 +158,7 @@
       color: var(--tx1);
       margin-bottom: 3px;
       letter-spacing: -0.015em;
-      cursor: pointer;
     }
-    .school-title:hover { color: var(--accent); }
     .school-plot-sub { font-size: 13px; color: var(--tx2); }
     @media (max-width: 600px) {
       .school-plot-sub { font-size: 12px; }
@@ -341,7 +341,7 @@
 <body>
 
 <header>
-  <h1>How much money will I make?</h1>
+  <h1 id="siteTitle">How much money will I make?</h1>
   <p class="hero-sub">Average earnings of college graduates, by school & major</p>
 </header>
 
@@ -1382,7 +1382,7 @@ function goHome() {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-document.getElementById('schoolTitle').addEventListener('click', goHome);
+document.getElementById('siteTitle').addEventListener('click', goHome);
 
 async function searchAndShow(q) {
   const el = document.getElementById('suggestions');
