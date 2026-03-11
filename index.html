@@ -156,7 +156,9 @@
       color: var(--tx1);
       margin-bottom: 3px;
       letter-spacing: -0.015em;
+      cursor: pointer;
     }
+    .school-title:hover { color: var(--accent); }
     .school-plot-sub { font-size: 13px; color: var(--tx2); }
     @media (max-width: 600px) {
       .school-plot-sub { font-size: 12px; }
@@ -1369,6 +1371,18 @@ let lastSchools = [];
 function closeSuggestions() {
   document.getElementById('suggestions').classList.remove('open');
 }
+
+function goHome() {
+  document.getElementById('results').classList.remove('visible');
+  document.getElementById('schoolSearch').value = '';
+  closeSuggestions();
+  currentSchool = null;
+  history.pushState({}, '', window.location.pathname);
+  document.getElementById('schoolSearch').focus();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+document.getElementById('schoolTitle').addEventListener('click', goHome);
 
 async function searchAndShow(q) {
   const el = document.getElementById('suggestions');
